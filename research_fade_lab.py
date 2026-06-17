@@ -7,7 +7,6 @@ from datetime import datetime, timezone
 ROOT = Path("/root/skynet")
 DATA = ROOT / "data"
 OUT_DIR = ROOT / "safe_exports" / "research_reports"
-
 DB = DATA / "v17_microstructure.sqlite3"
 
 def ts():
@@ -34,19 +33,12 @@ def pf(vals):
 def stat(vals):
     n = len(vals)
     if not n:
-        return {
-            "n": 0,
-            "sum": 0.0,
-            "avg": 0.0,
-            "wr": 0.0,
-            "pf": 0.0,
-            "best": 0.0,
-            "worst": 0.0,
-        }
+        return {"n": 0, "sum": 0.0, "avg": 0.0, "wr": 0.0, "pf": 0.0, "best": 0.0, "worst": 0.0}
+    s = sum(vals)
     return {
         "n": n,
-        "sum": sum(vals),
-        "avg": sum(vals) / n,
+        "sum": s,
+        "avg": s / n,
         "wr": sum(1 for v in vals if v > 0) / n * 100,
         "pf": pf(vals),
         "best": max(vals),
@@ -56,15 +48,28 @@ def stat(vals):
 def connect():
     if not DB.exists():
         raise SystemExit(f"NO DB: {DB}")
-    uri = f"file:{DB}?mode=ro"
-    con = sqlite3.connect(uri, uri=True, timeout=10)
+    con = sqlite3.connect(f"file:{DB}?mode=ro", uri=True, timeout=10)
     con.row_factory = sqlite3.Row
     return con
 
 def load_rows():
     con = connect()
     rows = con.execute("""
-        SELECT *
+        SELECT
+            ts,
+            clean_symbol,
+            spread_bps,
+            current_turnover_rank,
+            price_change,
+            vol_ratio,
+            oi_change,
+            imb_5,
+            wall_skew,
+            max_up_5m,
+            max_down_5m,
+            close_5m,
+            long_net_5m,
+            short_net_5m
         FROM signals
         WHERE long_net_5m IS NOT NULL
           AND short_net_5m IS NOT NULL
@@ -73,112 +78,10 @@ def load_rows():
     con.close()
     return [dict(r) for r in rows]
 
-def val(row, k):
-    return f(row.get(k))
+def row_net(r, side):
+    return f(r["long_net_5m"] if side == "LONG" else r["short_net_5m"])
 
-def make_rules():
-    spread_rules = [
-        ("SP2", lambda r: val(r, "spread_bps") <= 2),
-        ("SP3", lambda r: val(r, "spread_bps") <= 3),
-        ("SP5", lambda r: val(r, "spread_bps") <= 5),
-        ("SP7", lambda r: val(r, "spread_bps") <= 7),
-        ("SP12", lambda r: val(r, "spread_bps") <= 12),
-    ]
-
-    rank_rules = [
-        ("R40", lambda r: val(r, "current_turnover_rank") <= 40),
-        ("R80", lambda r: val(r, "current_turnover_rank") <= 80),
-        ("R150", lambda r: val(r, "current_turnover_rank") <= 150),
-    ]
-
-    pc_rules = [
-        ("PC_POS", lambda r: val(r, "price_change") > 0),
-        ("PC_NEG", lambda r: val(r, "price_change") < 0),
-        ("ABS030", lambda r: abs(val(r, "price_change")) >= 0.30),
-        ("ABS050", lambda r: abs(val(r, "price_change")) >= 0.50),
-        ("ABS070", lambda r: abs(val(r, "price_change")) >= 0.70),
-        ("SMALL030", lambda r: abs(val(r, "price_change")) < 0.30),
-    ]
-
-    vol_rules = [
-        ("V3", lambda r: val(r, "vol_ratio") >= 3),
-        ("V5", lambda r: val(r, "vol_ratio") >= 5),
-        ("V8", lambda r: val(r, "vol_ratio") >= 8),
-        ("V12", lambda r: val(r, "vol_ratio") >= 12),
-    ]
-
-    oi_rules = [
-        ("OI_ANY", lambda r: True),
-        ("OI_POS", lambda r: val(r, "oi_change") > 0),
-        ("OI_NEG", lambda r: val(r, "oi_change") < 0),
-        ("OI_BIG_POS", lambda r: val(r, "oi_change") >= 2),
-        ("OI_BIG_NEG", lambda r: val(r, "oi_change") <= -2),
-    ]
-
-    imb_rules = [
-        ("IMB_ANY", lambda r: True),
-        ("IMB_BID", lambda r: val(r, "imb_5") > 0.2),
-        ("IMB_ASK", lambda r: val(r, "imb_5") < -0.2),
-    ]
-
-    wall_rules = [
-        ("WALL_ANY", lambda r: True),
-        ("WALL_POS", lambda r: val(r, "wall_skew") > 0),
-        ("WALL_NEG", lambda r: val(r, "wall_skew") < 0),
-    ]
-
-    rules = []
-
-    for spn, spf in spread_rules:
-        for rn, rf in rank_rules:
-            for pcn, pcf in pc_rules:
-                for vn, vf in vol_rules:
-                    for oin, oif in oi_rules:
-                        for imbn, imbf in imb_rules:
-                            for wn, wf in wall_rules:
-                                name = "|".join([pcn, spn, rn, vn, oin, imbn, wn])
-                                funcs = [spf, rf, pcf, vf, oif, imbf, wf]
-                                rules.append((name, funcs))
-
-    return rules
-
-def apply_rule(rows, funcs):
-    out = []
-    for r in rows:
-        ok = True
-        for fn in funcs:
-            try:
-                if not fn(r):
-                    ok = False
-                    break
-            except Exception:
-                ok = False
-                break
-        if ok:
-            out.append(r)
-    return out
-
-def row_net(row, side):
-    if side == "LONG":
-        return f(row.get("long_net_5m"))
-    return f(row.get("short_net_5m"))
-
-def symbol_stats(rows, side):
-    by = {}
-    for r in rows:
-        sym = r.get("clean_symbol") or r.get("symbol") or "?"
-        by.setdefault(sym, []).append(row_net(r, side))
-
-    items = []
-    for sym, vals in by.items():
-        s = stat(vals)
-        items.append((s["sum"], sym, s))
-
-    best = sorted(items, reverse=True)[:8]
-    worst = sorted(items)[:8]
-    return best, worst
-
-def render_side_summary(rows, side):
+def side_line(rows, side):
     vals = [row_net(r, side) for r in rows]
     s = stat(vals)
     return (
@@ -186,97 +89,217 @@ def render_side_summary(rows, side):
         f"wr={s['wr']:5.1f}% pf={s['pf']:.2f} best={money(s['best'])} worst={money(s['worst'])}"
     )
 
+def sym_line(rows, side):
+    by = {}
+    for r in rows:
+        sym = r.get("clean_symbol") or "?"
+        by.setdefault(sym, []).append(row_net(r, side))
+    items = []
+    for sym, vals in by.items():
+        s = stat(vals)
+        items.append((s["sum"], sym, s["n"], s["avg"], s["pf"]))
+    best = sorted(items, reverse=True)[:8]
+    worst = sorted(items)[:8]
+    return best, worst
+
+def make_rule_parts():
+    return {
+        "spread": [
+            ("SP2", lambda r: f(r["spread_bps"]) <= 2),
+            ("SP3", lambda r: f(r["spread_bps"]) <= 3),
+            ("SP5", lambda r: f(r["spread_bps"]) <= 5),
+            ("SP7", lambda r: f(r["spread_bps"]) <= 7),
+            ("SP12", lambda r: f(r["spread_bps"]) <= 12),
+        ],
+        "rank": [
+            ("R40", lambda r: f(r["current_turnover_rank"]) <= 40),
+            ("R80", lambda r: f(r["current_turnover_rank"]) <= 80),
+            ("R150", lambda r: f(r["current_turnover_rank"]) <= 150),
+        ],
+        "pc": [
+            ("PC_POS", lambda r: f(r["price_change"]) > 0),
+            ("PC_NEG", lambda r: f(r["price_change"]) < 0),
+            ("ABS030", lambda r: abs(f(r["price_change"])) >= 0.30),
+            ("ABS050", lambda r: abs(f(r["price_change"])) >= 0.50),
+            ("ABS070", lambda r: abs(f(r["price_change"])) >= 0.70),
+        ],
+        "vol": [
+            ("V5", lambda r: f(r["vol_ratio"]) >= 5),
+            ("V8", lambda r: f(r["vol_ratio"]) >= 8),
+            ("V12", lambda r: f(r["vol_ratio"]) >= 12),
+        ],
+        "oi": [
+            ("OI_ANY", lambda r: True),
+            ("OI_POS", lambda r: f(r["oi_change"]) > 0),
+            ("OI_NEG", lambda r: f(r["oi_change"]) < 0),
+            ("OI_BIG_POS", lambda r: f(r["oi_change"]) >= 2),
+            ("OI_BIG_NEG", lambda r: f(r["oi_change"]) <= -2),
+        ],
+        "imb": [
+            ("IMB_ANY", lambda r: True),
+            ("IMB_BID", lambda r: f(r["imb_5"]) > 0.2),
+            ("IMB_ASK", lambda r: f(r["imb_5"]) < -0.2),
+        ],
+        "wall": [
+            ("WALL_ANY", lambda r: True),
+            ("WALL_POS", lambda r: f(r["wall_skew"]) > 0),
+            ("WALL_NEG", lambda r: f(r["wall_skew"]) < 0),
+        ],
+    }
+
+def apply_parts(rows, parts):
+    out = []
+    for r in rows:
+        ok = True
+        for _, fn in parts:
+            if not fn(r):
+                ok = False
+                break
+        if ok:
+            out.append(r)
+    return out
+
+def evaluate_rule(name, parts, train, test, min_train, min_test):
+    train_rows = apply_parts(train, parts)
+    test_rows = apply_parts(test, parts)
+
+    if len(train_rows) < min_train or len(test_rows) < min_test:
+        return []
+
+    res = []
+    for side in ("LONG", "SHORT"):
+        tr = stat([row_net(r, side) for r in train_rows])
+        te = stat([row_net(r, side) for r in test_rows])
+        al = stat([row_net(r, side) for r in train_rows + test_rows])
+
+        robust = (
+            tr["sum"] > 0
+            and te["sum"] > 0
+            and tr["pf"] >= 1.05
+            and te["pf"] >= 1.05
+            and al["avg"] > 0
+        )
+
+        score = te["sum"] * 2.0 + tr["sum"] * 0.5 + min(te["n"], 100) * 0.01 - abs(tr["avg"] - te["avg"]) * 5.0
+
+        res.append({
+            "name": name,
+            "side": side,
+            "train": tr,
+            "test": te,
+            "all": al,
+            "robust": robust,
+            "score": score,
+            "test_rows": test_rows,
+        })
+    return res
+
+def build_candidates(parts):
+    rules = []
+
+    # 1-part and 2-part broad rules
+    groups = ["spread", "rank", "pc", "vol", "oi", "imb", "wall"]
+
+    for g in groups:
+        for name, fn in parts[g]:
+            rules.append((name, [(name, fn)]))
+
+    # core 4-part rules: pc + spread + rank + vol
+    for pc in parts["pc"]:
+        for sp in parts["spread"]:
+            for rk in parts["rank"]:
+                for vol in parts["vol"]:
+                    names = [pc[0], sp[0], rk[0], vol[0]]
+                    rules.append(("|".join(names), [pc, sp, rk, vol]))
+
+                    # add one micro condition at a time, not all combinations
+                    for oi in parts["oi"][1:]:
+                        rules.append(("|".join(names + [oi[0]]), [pc, sp, rk, vol, oi]))
+                    for imb in parts["imb"][1:]:
+                        rules.append(("|".join(names + [imb[0]]), [pc, sp, rk, vol, imb]))
+                    for wall in parts["wall"][1:]:
+                        rules.append(("|".join(names + [wall[0]]), [pc, sp, rk, vol, wall]))
+
+    # specific hypotheses from previous logs
+    hypotheses = [
+        ["PC_NEG", "SP3", "R150", "V8", "OI_POS", "IMB_ASK"],
+        ["PC_NEG", "SP3", "R150", "V8", "OI_POS"],
+        ["PC_NEG", "SP7", "R150", "V8", "OI_POS"],
+        ["PC_POS", "SP3", "R80", "V8", "OI_POS"],
+        ["PC_POS", "SP7", "R80", "V8", "OI_POS"],
+        ["ABS070", "SP12", "R150", "V8"],
+        ["ABS050", "SP7", "R80", "V8"],
+    ]
+
+    index = {}
+    for g in parts.values():
+        for item in g:
+            index[item[0]] = item
+
+    for names in hypotheses:
+        available = [index[n] for n in names if n in index]
+        if len(available) == len(names):
+            rules.append(("HYP|" + "|".join(names), available))
+
+    # dedupe
+    seen = set()
+    out = []
+    for name, rule_parts in rules:
+        if name in seen:
+            continue
+        seen.add(name)
+        out.append((name, rule_parts))
+    return out
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--min-train", type=int, default=40)
-    ap.add_argument("--min-test", type=int, default=15)
-    ap.add_argument("--top", type=int, default=60)
+    ap.add_argument("--min-train", type=int, default=35)
+    ap.add_argument("--min-test", type=int, default=12)
+    ap.add_argument("--top", type=int, default=80)
     ap.add_argument("--stdout", action="store_true")
     args = ap.parse_args()
 
     rows = load_rows()
-    if not rows:
-        raise SystemExit("NO CLOSED V17 ROWS")
-
     split_i = int(len(rows) * 0.70)
     train = rows[:split_i]
     test = rows[split_i:]
 
-    lines = []
-    lines.append("=" * 100)
-    lines.append(f"SKYNET RESEARCH FADE LAB UTC={ts()}")
-    lines.append("=" * 100)
-    lines.append("")
-    lines.append(f"DB={DB}")
-    lines.append(f"rows_total={len(rows)} train={len(train)} test={len(test)} split=70/30 chronological")
-    lines.append("")
-    lines.append("GLOBAL:")
-    lines.append("  " + render_side_summary(rows, "LONG"))
-    lines.append("  " + render_side_summary(rows, "SHORT"))
-    lines.append("")
-    lines.append("TRAIN:")
-    lines.append("  " + render_side_summary(train, "LONG"))
-    lines.append("  " + render_side_summary(train, "SHORT"))
-    lines.append("")
-    lines.append("TEST:")
-    lines.append("  " + render_side_summary(test, "LONG"))
-    lines.append("  " + render_side_summary(test, "SHORT"))
-    lines.append("")
+    parts = make_rule_parts()
+    rules = build_candidates(parts)
 
     results = []
-    rules = make_rules()
-
-    for name, funcs in rules:
-        train_rows = apply_rule(train, funcs)
-        test_rows = apply_rule(test, funcs)
-
-        if len(train_rows) < args.min_train or len(test_rows) < args.min_test:
-            continue
-
-        for side in ["LONG", "SHORT"]:
-            tr_vals = [row_net(r, side) for r in train_rows]
-            te_vals = [row_net(r, side) for r in test_rows]
-            all_vals = [row_net(r, side) for r in train_rows + test_rows]
-
-            tr = stat(tr_vals)
-            te = stat(te_vals)
-            al = stat(all_vals)
-
-            robust = (
-                tr["sum"] > 0
-                and te["sum"] > 0
-                and tr["pf"] >= 1.05
-                and te["pf"] >= 1.05
-                and al["avg"] > 0
-            )
-
-            # score punishes tiny test and unstable splits
-            score = (
-                te["sum"] * 2.0
-                + tr["sum"] * 0.5
-                + min(te["n"], 80) * 0.01
-                - abs(tr["avg"] - te["avg"]) * 5.0
-            )
-
-            results.append({
-                "robust": robust,
-                "score": score,
-                "side": side,
-                "name": name,
-                "train_rows": train_rows,
-                "test_rows": test_rows,
-                "train": tr,
-                "test": te,
-                "all": al,
-            })
+    for name, rule_parts in rules:
+        results.extend(evaluate_rule(name, rule_parts, train, test, args.min_train, args.min_test))
 
     robust = [r for r in results if r["robust"]]
+
+    lines = []
+    lines.append("=" * 100)
+    lines.append(f"SKYNET RESEARCH FADE LAB FAST UTC={ts()}")
+    lines.append("=" * 100)
+    lines.append(f"DB={DB}")
+    lines.append(f"rows_total={len(rows)} train={len(train)} test={len(test)} split=70/30 chronological")
+    lines.append(f"rules_checked={len(rules)} results={len(results)} min_train={args.min_train} min_test={args.min_test}")
+    lines.append("")
+    lines.append("GLOBAL:")
+    lines.append("  " + side_line(rows, "LONG"))
+    lines.append("  " + side_line(rows, "SHORT"))
+    lines.append("")
+    lines.append("TRAIN:")
+    lines.append("  " + side_line(train, "LONG"))
+    lines.append("  " + side_line(train, "SHORT"))
+    lines.append("")
+    lines.append("TEST:")
+    lines.append("  " + side_line(test, "LONG"))
+    lines.append("  " + side_line(test, "SHORT"))
+
+    lines.append("")
     lines.append("=" * 100)
     lines.append("ROBUST RULES: train positive + test positive + PF>=1.05")
     lines.append("=" * 100)
 
     if not robust:
-        lines.append("[EMPTY] Нет устойчивых правил по строгому train/test. Это важный вывод: edge пока не доказан.")
+        lines.append("[EMPTY] Нет устойчивых правил по строгому train/test. Edge пока не доказан.")
     else:
         for r in sorted(robust, key=lambda x: x["score"], reverse=True)[:args.top]:
             tr, te, al = r["train"], r["test"], r["all"]
@@ -286,13 +309,13 @@ def main():
                 f"TR n={tr['n']:4d} sum={money(tr['sum']):>8s} avg={money(tr['avg']):>8s} pf={tr['pf']:.2f} | "
                 f"TE n={te['n']:4d} sum={money(te['sum']):>8s} avg={money(te['avg']):>8s} pf={te['pf']:.2f}"
             )
-            best, worst = symbol_stats(r["test_rows"], r["side"])
-            lines.append(f"      test_best_symbols ={[(s, round(st['sum'], 3), st['n']) for _, s, st in best]}")
-            lines.append(f"      test_worst_symbols={[(s, round(st['sum'], 3), st['n']) for _, s, st in worst]}")
+            best, worst = sym_line(r["test_rows"], r["side"])
+            lines.append(f"      test_best_symbols ={[(s, round(sm, 3), n) for sm, s, n, avg, pfv in best]}")
+            lines.append(f"      test_worst_symbols={[(s, round(sm, 3), n) for sm, s, n, avg, pfv in worst]}")
 
     lines.append("")
     lines.append("=" * 100)
-    lines.append("TOP TEST RULES, EVEN IF TRAIN NOT ROBUST")
+    lines.append("TOP TEST RULES")
     lines.append("=" * 100)
 
     for r in sorted(results, key=lambda x: x["test"]["sum"], reverse=True)[:args.top]:
@@ -306,12 +329,11 @@ def main():
 
     lines.append("")
     lines.append("=" * 100)
-    lines.append("INTERPRETATION")
+    lines.append("DECISION")
     lines.append("=" * 100)
-    lines.append("1. Если ROBUST RULES пустой — real нельзя даже обсуждать.")
-    lines.append("2. Если robust есть только SHORT — это research-only fade, не live.")
-    lines.append("3. Если train плюс, test минус — это переобучение.")
-    lines.append("4. Следующий шаг после этого отчета: добавить лучший robust-rule как shadow-only track, а не real.")
+    lines.append("If ROBUST RULES is empty: do not add fade strategy yet.")
+    lines.append("If robust SHORT exists: next step is shadow-only track, not real.")
+    lines.append("If only TOP TEST is green but TRAIN is red: it is likely regime/noise.")
 
     text = "\n".join(lines) + "\n"
 
@@ -320,7 +342,7 @@ def main():
         return
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    out = OUT_DIR / f"research_fade_lab_{ts()}.txt"
+    out = OUT_DIR / f"research_fade_lab_fast_{ts()}.txt"
     out.write_text(text, encoding="utf-8", errors="ignore")
     print(out)
 
