@@ -1,0 +1,55 @@
+# ===== secrets / env =====
+.env
+.env.*
+!.env.example
+
+# ===== python env/cache =====
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ===== logs =====
+logs/
+*.log
+
+# ===== runtime data / db / state =====
+data/
+*.db
+*.sqlite
+*.sqlite3
+*.session
+*.session-journal
+
+# ===== cache/tmp =====
+cache/
+tmp/
+*_tmp/
+v*_tmp/
+
+# ===== backups/archive/exports =====
+backup*/
+*backup*/
+old*/
+archive/
+safe_exports/
+*.bak
+*.save
+*.zip
+
+# ===== generated reports / analysis outputs =====
+*.txt
+
+# ===== risky local live smoke tests =====
+real_smoke_open_close.py
+
+# ===== editor/system =====
+.vscode/
+.idea/
+.DS_Store
