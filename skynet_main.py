@@ -101,7 +101,7 @@ async def dump_log_always(log_interval, date_postfix, books, dry_live, skip_trac
 
     send_name = f"skynet_{log_interval}_{date_postfix}.log"
     os.rename(filename, send_name)
-    await client.send_file(-1002953234396, send_name, caption=f"📁 v16 MicroLive лог за {log_interval} ({date_postfix})")
+    await client.send_file(cfg.TG_TARGET, send_name, caption=f"📁 v16 MicroLive лог за {log_interval} ({date_postfix})")
 
     try:
         os.remove(send_name)
@@ -664,7 +664,7 @@ async def scan_futures():
                         no_dry_open = dry_live.reset_if_no_open()
                         if no_shadow_open and no_dry_open:
                             write_to_logs("\n🔄 RESET 24H: locks/stats/bans reset.\n")
-                            await client.send_message(-1002953234396, "🔄 **RESET 24H:** stats, locks and bans reset.")
+                            await client.send_message(cfg.TG_TARGET, "🔄 **RESET 24H:** stats, locks and bans reset.")
                             last_reset_time = current_time
                         else:
                             write_to_logs("⏳ RESET delayed: active shadow/dry-live trades exist.\n")
@@ -900,7 +900,7 @@ async def scan_futures():
                                 f"⚙️ DRY_TRACKS={','.join(cfg.LIVE_DRY_TRACKS)}\n"
                                 f"🖥 [ПК (Браузер)]({candidate['link_pc']})"
                             )
-                            await client.send_message(-1002953234396, msg, link_preview=False)
+                            await client.send_message(cfg.TG_TARGET, msg, link_preview=False)
                             last_alert_time[symbol] = current_time
 
                     # --- PROCESS SELECTOR STRATEGIES AFTER FULL SNAPSHOT ---
@@ -978,7 +978,7 @@ async def scan_futures():
                             )
 
                         await client.send_message(
-                            -1002953234396,
+                            cfg.TG_TARGET,
                             f"🤖 **SKYNET V16 MICRO-LIVE ЖИВ** 🤖\n"
                             f"⏱ Время: {time.strftime('%H:%M:%S')}\n\n"
                             + "\n".join(report_lines)
