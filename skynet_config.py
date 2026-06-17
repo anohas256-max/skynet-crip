@@ -8,7 +8,11 @@ BOT_VERSION = "SKYNET_PRO_V16_MICRO_LIVE_META_ONLY"
 
 API_ID = int(os.getenv("API_ID", "0"))
 API_HASH = os.getenv("API_HASH", "")
-TG_TARGET = os.getenv("TG_TARGET", "-1002953234396")
+TG_TARGET_RAW = os.getenv("TG_TARGET", "-1002953234396")
+try:
+    TG_TARGET = int(TG_TARGET_RAW) if str(TG_TARGET_RAW).lstrip("-").isdigit() else TG_TARGET_RAW
+except Exception:
+    TG_TARGET = TG_TARGET_RAW
 
 # ============================================================
 # LIVE / DRY-LIVE
