@@ -356,7 +356,11 @@ def send_to_telegram(path: Path, target: str | None):
         raise RuntimeError("API_ID/API_HASH missing; cannot send via Telethon")
 
     target = target or os.getenv("TG_TARGET") or getattr(cfg, "TG_TARGET", None) or "me"
-    session = str(ROOT / "volume_session")
+    
+    # Separate Telethon session for context exports.
+    # Do not use the runtime volume_session, otherwise sqlite session may lock
+    # when skynet.service is running.
+    session = str(ROOT / "context_pack_session")
 
     caption = f"SKYNET context pack {path.name}"
     print(f"SENDING_TO={target}")
