@@ -317,11 +317,13 @@ Current architecture:
         run("for f in $(find /root/skynet -maxdepth 1 -type f -name '*.txt' | sort | tail -10); do echo '---' $f; tail -80 \"$f\"; done", timeout=20),
     ]))
 
-    write(report_dir / "08_code_compile_check.txt", run(f"{ROOT}/.venv/bin/python -m py_compile skynet_config.py skynet_engine.py skynet_main.py skynet_live_mexc.py skynet_lab_report.py research_fade_lab.py", timeout=30))
+    write(report_dir / "08_code_compile_check.txt", run(f"{ROOT}/.venv/bin/python -m py_compile skynet_config.py skynet_engine.py skynet_main.py skynet_live_mexc.py skynet_lab_report.py research_fade_lab.py research_fade_shadow.py research_fade_live_report.py", timeout=30))
 
     write(report_dir / "09_lab_report.txt", run(f"{ROOT}/.venv/bin/python {ROOT}/skynet_lab_report.py --stdout", timeout=40))
 
     write(report_dir / "10_research_fade_lab.txt", run(f"{ROOT}/.venv/bin/python {ROOT}/research_fade_lab.py --stdout", timeout=60))
+
+    write(report_dir / "11_research_fade_live_report.txt", run(f"{ROOT}/.venv/bin/python {ROOT}/research_fade_live_report.py --stdout", timeout=20))
 
     # copy tracked code files
     tracked = run("git ls-files").splitlines()

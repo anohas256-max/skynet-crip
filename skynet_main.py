@@ -9,6 +9,7 @@ from telethon import TelegramClient
 
 import skynet_config as cfg
 import skynet_engine as eng
+import research_fade_shadow
 
 
 client = TelegramClient("volume_session", cfg.API_ID, cfg.API_HASH)
@@ -621,6 +622,7 @@ async def scan_futures():
     books = eng.build_books()
     dry_live = eng.DryLiveManager(cfg.LIVE_DRY_TRACKS)
     skip_tracker = eng.SkipTracker()
+    fade_shadow = research_fade_shadow.ResearchFadeV1Shadow(write_to_logs)
 
     history = {}
     last_alert_time = {}
@@ -905,6 +907,15 @@ async def scan_futures():
 
                     # --- PROCESS SELECTOR STRATEGIES AFTER FULL SNAPSHOT ---
                     await eng.enrich_selector_candidates_with_depth(session, selector_candidates, snapshot_time_str)
+
+                    # Research-only fade shadow opens after depth enrichment.
+                    # It observes the same live candidate stream but never affects selector/dry/real.
+                    fade_unique = {}
+                    for _cand_list in selector_candidates.values():
+                        for _cand in _cand_list:
+                            fade_unique[_cand["symbol"]] = _cand
+                    for _cand in fade_unique.values():
+                        fade_shadow.maybe_open(_cand, current_time, snapshot_time_str)
 
                     for s_name in selector_names:
                         scfg = strategy_configs[s_name]

@@ -614,6 +614,21 @@ async def get_depth_metrics(session, symbol):
             top_bids = [parse_depth_level(x) for x in bids[:cfg.DEPTH_LIMIT]]
             top5_ask_usdt = sum(p * q for p, q in top_asks if p > 0 and q > 0)
             top5_bid_usdt = sum(p * q for p, q in top_bids if p > 0 and q > 0)
+
+            # Microstructure fields compatible with v17 recorder naming.
+            # imb_5 < 0 means ASK side dominates top levels, useful for SHORT/fade research.
+            imb_5 = 0.0
+            if (top5_bid_usdt + top5_ask_usdt) > 0:
+                imb_5 = (top5_bid_usdt - top5_ask_usdt) / (top5_bid_usdt + top5_ask_usdt)
+
+            bid_wall = 0.0
+            ask_wall = 0.0
+            if top5_bid_usdt > 0 and top_bids:
+                bid_wall = max((p * q for p, q in top_bids if p > 0 and q > 0), default=0.0) / top5_bid_usdt
+            if top5_ask_usdt > 0 and top_asks:
+                ask_wall = max((p * q for p, q in top_asks if p > 0 and q > 0), default=0.0) / top5_ask_usdt
+            wall_skew = bid_wall - ask_wall
+
             depth_thin = top5_bid_usdt < cfg.MIN_TOP5_BID_USDT or top5_ask_usdt < cfg.MIN_TOP5_ASK_USDT
 
             return {
@@ -624,6 +639,9 @@ async def get_depth_metrics(session, symbol):
                 "spread_bps": spread_bps,
                 "top5_bid_usdt": top5_bid_usdt,
                 "top5_ask_usdt": top5_ask_usdt,
+                "imb_5": imb_5,
+                "imb_20": imb_5,
+                "wall_skew": wall_skew,
                 "depth_thin": depth_thin,
             }
     except Exception as e:
@@ -700,6 +718,9 @@ async def enrich_selector_candidates_with_depth(session, selector_candidates: Di
             c["top5_ask_usdt"] = safe_float(m.get("top5_ask_usdt"), 0.0)
             c["best_bid"] = safe_float(m.get("bid"), 0.0)
             c["best_ask"] = safe_float(m.get("ask"), 0.0)
+            c["imb_5"] = safe_float(m.get("imb_5"), 0.0)
+            c["imb_20"] = safe_float(m.get("imb_20"), c["imb_5"])
+            c["wall_skew"] = safe_float(m.get("wall_skew"), 0.0)
             c["depth_cache"] = bool(m.get("cache", False))
 
     for c in selected:
@@ -707,7 +728,8 @@ async def enrich_selector_candidates_with_depth(session, selector_candidates: Di
             log(
                 f"[{time_str}] DEPTH_OK | {c['clean_symbol']} | "
                 f"spread={c.get('spread_bps',999):.2f}bps | "
-                f"bid5=${c.get('top5_bid_usdt',0):.0f} ask5=${c.get('top5_ask_usdt',0):.0f} | "
+                f"bid5=${c.get('top5_bid_usdt',0):.0f} ask5=${c.get('top5_ask_usdt',0):.0f} "
+                f"imb5={c.get('imb_5',0):+.2f} | "
                 f"checked_top={len(selected)}/{len(unique)} cache={1 if c.get('depth_cache') else 0}\n"
             )
         else:
@@ -717,7 +739,8 @@ async def enrich_selector_candidates_with_depth(session, selector_candidates: Di
             log(
                 f"[{time_str}] {tag} | {c['clean_symbol']} | {c.get('depth_reason','UNKNOWN')} | "
                 f"spread={c.get('spread_bps',999):.2f}bps | "
-                f"bid5=${c.get('top5_bid_usdt',0):.0f} ask5=${c.get('top5_ask_usdt',0):.0f} | "
+                f"bid5=${c.get('top5_bid_usdt',0):.0f} ask5=${c.get('top5_ask_usdt',0):.0f} "
+                f"imb5={c.get('imb_5',0):+.2f} | "
                 f"checked_top={len(selected)}/{len(unique)}\n"
             )
 

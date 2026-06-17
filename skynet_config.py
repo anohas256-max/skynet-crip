@@ -937,3 +937,25 @@ def build_strategy_configs():
     ]
 
     return {c.name: c for c in configs}
+
+
+# ============================================================
+# RESEARCH FADE V1 SHADOW ONLY
+# ============================================================
+# Based on v17 train/test weak robust rule:
+# SHORT ABS030|SP3|R150|V5|IMB_ASK
+# This is research-only. It never sends real orders and does not affect dry-live.
+RESEARCH_FADE_V1_ENABLED = os.getenv("RESEARCH_FADE_V1_ENABLED", "true").lower() == "true"
+RESEARCH_FADE_V1_SIDE = os.getenv("RESEARCH_FADE_V1_SIDE", "SHORT")
+RESEARCH_FADE_V1_TTL_SECONDS = float(os.getenv("RESEARCH_FADE_V1_TTL_SECONDS", "300"))
+RESEARCH_FADE_V1_MARGIN = float(os.getenv("RESEARCH_FADE_V1_MARGIN", "3.0"))
+RESEARCH_FADE_V1_LEVERAGE = int(os.getenv("RESEARCH_FADE_V1_LEVERAGE", "4"))
+RESEARCH_FADE_V1_MAX_OPEN = int(os.getenv("RESEARCH_FADE_V1_MAX_OPEN", "3"))
+RESEARCH_FADE_V1_COOLDOWN_SECONDS = float(os.getenv("RESEARCH_FADE_V1_COOLDOWN_SECONDS", "600"))
+
+RESEARCH_FADE_V1_MIN_ABS_PC = float(os.getenv("RESEARCH_FADE_V1_MIN_ABS_PC", "0.30"))
+RESEARCH_FADE_V1_MAX_SPREAD_BPS = float(os.getenv("RESEARCH_FADE_V1_MAX_SPREAD_BPS", "3.0"))
+RESEARCH_FADE_V1_MAX_RANK = int(os.getenv("RESEARCH_FADE_V1_MAX_RANK", "150"))
+RESEARCH_FADE_V1_MIN_VOL_RATIO = float(os.getenv("RESEARCH_FADE_V1_MIN_VOL_RATIO", "5.0"))
+RESEARCH_FADE_V1_IMB5_MAX = float(os.getenv("RESEARCH_FADE_V1_IMB5_MAX", "-0.20"))
+
