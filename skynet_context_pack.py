@@ -317,7 +317,9 @@ Current architecture:
         run("for f in $(find /root/skynet -maxdepth 1 -type f -name '*.txt' | sort | tail -10); do echo '---' $f; tail -80 \"$f\"; done", timeout=20),
     ]))
 
-    write(report_dir / "08_code_compile_check.txt", run(f"{ROOT}/.venv/bin/python -m py_compile skynet_config.py skynet_engine.py skynet_main.py skynet_live_mexc.py", timeout=30))
+    write(report_dir / "08_code_compile_check.txt", run(f"{ROOT}/.venv/bin/python -m py_compile skynet_config.py skynet_engine.py skynet_main.py skynet_live_mexc.py skynet_lab_report.py", timeout=30))
+
+    write(report_dir / "09_lab_report.txt", run(f"{ROOT}/.venv/bin/python {ROOT}/skynet_lab_report.py --stdout", timeout=40))
 
     # copy tracked code files
     tracked = run("git ls-files").splitlines()
