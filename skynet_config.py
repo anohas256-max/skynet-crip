@@ -18,14 +18,7 @@ LIVE_DRY_RUN = os.getenv("LIVE_DRY_RUN", "true").lower() == "true"
 
 # Multi dry-live: несколько кандидатов параллельно с отдельным LiveNet/ShadowNet/Diff.
 # Реальный live потом должен быть только один победитель.
-DEFAULT_LIVE_DRY_TRACKS = (
-    # V13 winner from smart-universe tests.
-    "SMART_V2_STRICT_CLEAN_MO1,"
-    "SMART_V2_STRICT_BTC_MO1,"
-    "V15_SPREAD_SCOUT_MO1,"
-    # Keep one V12 control for comparison.
-    "META_V12_EXEC_SAFE_MO1"
-)
+DEFAULT_LIVE_DRY_TRACKS = "SMART_V2_STRICT_CLEAN_MO1,SMART_V2_STRICT_OI_MO1,META_V12_EXEC_SAFE_MO1"
 LIVE_DRY_TRACKS = [
     x.strip()
     for x in os.getenv("LIVE_DRY_TRACKS", DEFAULT_LIVE_DRY_TRACKS).split(",")
@@ -56,9 +49,9 @@ VIRTUAL_BALANCE = float(os.getenv("VIRTUAL_BALANCE", "40.0"))
 LEVERAGE = int(os.getenv("LEVERAGE", "10"))
 STOP_LOSS = float(os.getenv("STOP_LOSS", "0.5"))
 
-COMMISSION_RATE = float(os.getenv("COMMISSION_RATE", "0.0004"))  # 0.04% per side
-SPREAD_BPS = float(os.getenv("SPREAD_BPS", "2"))                 # base paper spread model
-SLIPPAGE_BPS = float(os.getenv("SLIPPAGE_BPS", "3"))             # base paper slippage per side
+COMMISSION_RATE = float(os.getenv("COMMISSION_RATE", "0.0008"))  # 0.04% per side
+SPREAD_BPS = float(os.getenv("SPREAD_BPS", "3"))                 # base paper spread model
+SLIPPAGE_BPS = float(os.getenv("SLIPPAGE_BPS", "5"))             # base paper slippage per side
 
 # ============================================================
 # LOCKS / RISK
@@ -176,9 +169,9 @@ TREND_ATR_CONFIRM_MAX_MOVE = float(os.getenv("TREND_ATR_CONFIRM_MAX_MOVE", "0.75
 ATR5B_SL_MULT = float(os.getenv("ATR5B_SL_MULT", "0.85"))
 ATR5B_SL_MIN = float(os.getenv("ATR5B_SL_MIN", "0.40"))
 ATR5B_SL_MAX = float(os.getenv("ATR5B_SL_MAX", "0.85"))
-ATR5B_PARTIAL_MULT = float(os.getenv("ATR5B_PARTIAL_MULT", "1.50"))
-ATR5B_PARTIAL_MIN = float(os.getenv("ATR5B_PARTIAL_MIN", "0.70"))
-ATR5B_PARTIAL_MAX = float(os.getenv("ATR5B_PARTIAL_MAX", "1.10"))
+ATR5B_PARTIAL_MULT = float(os.getenv("ATR5B_PARTIAL_MULT", "1.00"))
+ATR5B_PARTIAL_MIN = float(os.getenv("ATR5B_PARTIAL_MIN", "0.55"))
+ATR5B_PARTIAL_MAX = float(os.getenv("ATR5B_PARTIAL_MAX", "0.90"))
 ATR5B_RUNNER_TP_MULT = float(os.getenv("ATR5B_RUNNER_TP_MULT", "4.50"))
 ATR5B_RUNNER_TP_MIN = float(os.getenv("ATR5B_RUNNER_TP_MIN", "2.00"))
 ATR5B_RUNNER_TP_MAX = float(os.getenv("ATR5B_RUNNER_TP_MAX", "3.20"))
@@ -191,7 +184,7 @@ ATR5B_DEFAULT_PRE_RANGE_5M = float(os.getenv("ATR5B_DEFAULT_PRE_RANGE_5M", "0.75
 # ============================================================
 # V11.5 BREAKOUT-RISK + ATR5_B
 # ============================================================
-BREAKOUT_MIN_SCORE = int(os.getenv("BREAKOUT_MIN_SCORE", "5"))
+BREAKOUT_MIN_SCORE = int(os.getenv("BREAKOUT_MIN_SCORE", "4"))
 BREAKOUT_MIN_TREND_15M = float(os.getenv("BREAKOUT_MIN_TREND_15M", "0.40"))
 BREAKOUT_MIN_TREND_15M_LOOSE = float(os.getenv("BREAKOUT_MIN_TREND_15M_LOOSE", "0.30"))
 BREAKOUT_MAX_PRICE_CHANGE = float(os.getenv("BREAKOUT_MAX_PRICE_CHANGE", "0.65"))
@@ -215,16 +208,16 @@ BREAKOUT_COMBO_CLOSE_VS_EMA9_MIN = float(os.getenv("BREAKOUT_COMBO_CLOSE_VS_EMA9
 META_V12_MARGIN = float(os.getenv("META_V12_MARGIN", "3.0"))
 META_V12_LEVERAGE = int(os.getenv("META_V12_LEVERAGE", "4"))
 META_V12_MAX_OPEN = int(os.getenv("META_V12_MAX_OPEN", "1"))
-META_V12_SPREAD_LIMIT_BPS = float(os.getenv("META_V12_SPREAD_LIMIT_BPS", "5"))
+META_V12_SPREAD_LIMIT_BPS = float(os.getenv("META_V12_SPREAD_LIMIT_BPS", "7"))
 META_V12_MIN_SCORE = int(os.getenv("META_V12_MIN_SCORE", "4"))
 META_V12_MIN_TREND_15M = float(os.getenv("META_V12_MIN_TREND_15M", "0.30"))
 META_V12_STRICT_TREND_15M = float(os.getenv("META_V12_STRICT_TREND_15M", "0.40"))
-META_V12_MIN_BTC_5M = float(os.getenv("META_V12_MIN_BTC_5M", "-0.10"))
-META_V12_MAX_PRICE_CHANGE = float(os.getenv("META_V12_MAX_PRICE_CHANGE", "0.65"))
+META_V12_MIN_BTC_5M = float(os.getenv("META_V12_MIN_BTC_5M", "0.00"))
+META_V12_MAX_PRICE_CHANGE = float(os.getenv("META_V12_MAX_PRICE_CHANGE", "0.85"))
 META_V12_MAX_VOL_RATIO = float(os.getenv("META_V12_MAX_VOL_RATIO", "35"))
 META_V12_MAX_STRUCTURE_RISK = int(os.getenv("META_V12_MAX_STRUCTURE_RISK", "2"))
-META_V12_MAX_BRISK = int(os.getenv("META_V12_MAX_BRISK", "3"))
-META_V12_MAX_FALSE_BREAKOUTS = int(os.getenv("META_V12_MAX_FALSE_BREAKOUTS", "1"))
+META_V12_MAX_BRISK = int(os.getenv("META_V12_MAX_BRISK", "4"))
+META_V12_MAX_FALSE_BREAKOUTS = int(os.getenv("META_V12_MAX_FALSE_BREAKOUTS", "3"))
 META_V12_CONFIRM_MAX_MOVE = float(os.getenv("META_V12_CONFIRM_MAX_MOVE", "0.75"))
 META_V12_OI_SOFT_MIN = float(os.getenv("META_V12_OI_SOFT_MIN", "-0.50"))
 META_V12_OI_STRICT_MIN = float(os.getenv("META_V12_OI_STRICT_MIN", "0.00"))
@@ -236,13 +229,13 @@ META_V12_ROLL_TOP_N = int(os.getenv("META_V12_ROLL_TOP_N", "30"))
 SMART_V2_MARGIN = float(os.getenv("SMART_V2_MARGIN", "3.0"))
 SMART_V2_LEVERAGE = int(os.getenv("SMART_V2_LEVERAGE", "10"))
 SMART_V2_MAX_OPEN = int(os.getenv("SMART_V2_MAX_OPEN", "1"))
-SMART_V2_SPREAD_LIMIT_BPS = float(os.getenv("SMART_V2_SPREAD_LIMIT_BPS", "7"))
+SMART_V2_SPREAD_LIMIT_BPS = float(os.getenv("SMART_V2_SPREAD_LIMIT_BPS", "3"))
 
 # Universe zones:
 # core is always tradable after normal guards; mid is gated by rolling symbol quality;
 # above mid is monitor-only for future whitelist/blacklist learning.
-SMART_V2_CORE_TOP = int(os.getenv("SMART_V2_CORE_TOP", "30"))
-SMART_V2_MID_TOP = int(os.getenv("SMART_V2_MID_TOP", "70"))
+SMART_V2_CORE_TOP = int(os.getenv("SMART_V2_CORE_TOP", "40"))
+SMART_V2_MID_TOP = int(os.getenv("SMART_V2_MID_TOP", "40"))
 
 # V2_STRICT parameters from archive tests.
 SMART_V2_MIN_OBS = int(os.getenv("SMART_V2_MIN_OBS", "2"))
@@ -261,7 +254,7 @@ SMART_V2_COOLDOWN_HOURS = float(os.getenv("SMART_V2_COOLDOWN_HOURS", "24"))
 SMART_V2_PERSIST_ENABLED = os.getenv("SMART_V2_PERSIST_ENABLED", "true").lower() == "true"
 SMART_V2_PASSPORT_PATH = os.getenv("SMART_V2_PASSPORT_PATH", "/root/skynet/data/smart_v2_passport.json")
 
-SMART_V2_CORE_RISK_GATE_ENABLED = os.getenv("SMART_V2_CORE_RISK_GATE_ENABLED", "true").lower() == "true"
+SMART_V2_CORE_RISK_GATE_ENABLED = os.getenv("SMART_V2_CORE_RISK_GATE_ENABLED", "false").lower() == "true"
 SMART_V2_CORE_MIN_SCORE = int(os.getenv("SMART_V2_CORE_MIN_SCORE", "5"))
 SMART_V2_CORE_MAX_BRISK = int(os.getenv("SMART_V2_CORE_MAX_BRISK", "3"))
 SMART_V2_CORE_MAX_FALSE_BREAKOUTS = int(os.getenv("SMART_V2_CORE_MAX_FALSE_BREAKOUTS", "2"))
