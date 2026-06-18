@@ -95,6 +95,8 @@ async def dump_log_always(log_interval, date_postfix, books, dry_live, skip_trac
         f.write("\n")
         f.write(skip_tracker.format_report())
         f.write("\n")
+        f.write(fade_shadow.format_report())
+        f.write("\n")
         if hasattr(eng, "format_smart_v2_report"):
             f.write(eng.format_smart_v2_report())
             f.write("\n")
@@ -920,6 +922,10 @@ async def scan_futures():
                             fade_unique[_cand["symbol"]] = _cand
                     for _cand in fade_unique.values():
                         fade_shadow.maybe_open(_cand, current_time, snapshot_time_str)
+
+                    # Direct close polling for active fade positions.
+                    # This is independent from candidate/ticker recurrence.
+                    await fade_shadow.poll_active_prices(session, current_time, snapshot_time_str)
 
                     for s_name in selector_names:
                         scfg = strategy_configs[s_name]

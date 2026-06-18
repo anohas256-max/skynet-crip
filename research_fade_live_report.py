@@ -20,6 +20,14 @@ def sf(x, default=0.0):
         return default
 
 open_re = re.compile(
+    r"RESEARCH_FADE_V1_OPEN \| (?P<profile>[^|]+) \| SHORT \| (?P<symbol>[^|]+) \| .*?"
+    r"pc=(?P<pc>[+-]?[0-9.]+)% vol=x(?P<vol>[0-9.]+) "
+    r"spread=(?P<spread>[0-9.]+)bps rank=(?P<rank>[0-9]+) "
+    r"imb5=(?P<imb>[+-]?[0-9.]+)"
+)
+
+# backward compatibility for old open lines without profile
+old_open_re = re.compile(
     r"RESEARCH_FADE_V1_OPEN \| SHORT \| (?P<symbol>[^|]+) \| .*?"
     r"pc=(?P<pc>[+-]?[0-9.]+)% vol=x(?P<vol>[0-9.]+) "
     r"spread=(?P<spread>[0-9.]+)bps rank=(?P<rank>[0-9]+) "
@@ -27,7 +35,7 @@ open_re = re.compile(
 )
 
 close_re = re.compile(
-    r"RESEARCH_FADE_V1_CLOSE \| SHORT \| (?P<symbol>[^|]+) \| (?P<reason>[^|]+) \| .*?"
+    r"RESEARCH_FADE_V1_CLOSE \| (?P<profile>[^|]+) \| SHORT \| (?P<symbol>[^|]+) \| (?P<reason>[^|]+) \| .*?"
     r"Move:(?P<move>[+-]?[0-9.]+)% \| Gross:(?P<gross>[+-]?[0-9.]+)\$ "
     r"Net:(?P<net>[+-]?[0-9.]+)\$ Costs:(?P<costs>[0-9.]+)\$ \| "
     r"MFE:(?P<mfe>[+-]?[0-9.]+)% MAE:(?P<mae>[+-]?[0-9.]+)% .*?"
@@ -49,7 +57,20 @@ def main(stdout=False):
                 key = ("o", line)
                 if key not in seen:
                     seen.add(key)
-                    opens.append(mo.groupdict())
+                    d = mo.groupdict()
+                    opens.append(d)
+                continue
+
+            moo = old_open_re.search(line)
+            if moo:
+                key = ("o", line)
+                if key not in seen:
+                    seen.add(key)
+                    d = moo.groupdict()
+                    d["profile"] = "OLD_STRICT"
+                    opens.append(d)
+                continue
+
             mc = close_re.search(line)
             if mc:
                 key = ("c", line)
@@ -57,42 +78,53 @@ def main(stdout=False):
                     seen.add(key)
                     closes.append(mc.groupdict())
 
-    total_net = sum(sf(x["net"]) for x in closes)
-    total_gross = sum(sf(x["gross"]) for x in closes)
-    total_costs = sum(sf(x["costs"]) for x in closes)
-    wins = sum(1 for x in closes if sf(x["net"]) > 0)
-    n = len(closes)
-    wr = wins / n * 100 if n else 0.0
-
-    sym_net = defaultdict(float)
-    sym_n = Counter()
-    reasons = Counter()
-
-    for x in closes:
-        sym = x["symbol"].strip()
-        sym_net[sym] += sf(x["net"])
-        sym_n[sym] += 1
-        reasons[x["reason"].strip()] += 1
-
-    best = sorted(sym_net.items(), key=lambda x: x[1], reverse=True)[:10]
-    worst = sorted(sym_net.items(), key=lambda x: x[1])[:10]
+    by_profile = defaultdict(list)
+    for c in closes:
+        by_profile[c.get("profile", "UNKNOWN")].append(c)
 
     lines = []
     lines.append("=" * 90)
     lines.append(f"RESEARCH FADE V1 LIVE SHADOW REPORT UTC={ts()}")
     lines.append("=" * 90)
-    active_estimate = max(0, len(opens)-n)
-    lines.append(f"opens={len(opens)} closes={n} active_estimate={active_estimate}")
-    if len(opens) > 0 and n == 0:
-        lines.append("WARNING: fade has opens but zero closes. Check fade_shadow.update_price wiring or TTL closing.")
-    lines.append(f"net={total_net:+.2f}$ gross={total_gross:+.2f}$ costs=-{total_costs:.2f}$ wr={wr:.1f}% reasons={dict(reasons)}")
-    lines.append(f"best_symbols={[(s, round(v, 3), sym_n[s]) for s, v in best]}")
-    lines.append(f"worst_symbols={[(s, round(v, 3), sym_n[s]) for s, v in worst]}")
+    lines.append(f"opens={len(opens)} closes={len(closes)} active_estimate={max(0, len(opens)-len(closes))}")
+
+    if len(opens) > 0 and len(closes) == 0:
+        lines.append("WARNING: fade has opens but zero closes. Check direct polling / TTL close wiring.")
+
+    for profile in sorted(set([o.get("profile", "?") for o in opens]) | set(by_profile.keys())):
+        profile_opens = [o for o in opens if o.get("profile") == profile]
+        profile_closes = by_profile.get(profile, [])
+        n = len(profile_closes)
+        total_net = sum(sf(x["net"]) for x in profile_closes)
+        total_gross = sum(sf(x["gross"]) for x in profile_closes)
+        total_costs = sum(sf(x["costs"]) for x in profile_closes)
+        wins = sum(1 for x in profile_closes if sf(x["net"]) > 0)
+        wr = wins / n * 100 if n else 0.0
+
+        sym_net = defaultdict(float)
+        sym_n = Counter()
+        reasons = Counter()
+
+        for x in profile_closes:
+            sym = x["symbol"].strip()
+            sym_net[sym] += sf(x["net"])
+            sym_n[sym] += 1
+            reasons[x["reason"].strip()] += 1
+
+        best = sorted(sym_net.items(), key=lambda x: x[1], reverse=True)[:10]
+        worst = sorted(sym_net.items(), key=lambda x: x[1])[:10]
+
+        lines.append("")
+        lines.append(f"[{profile}] opens={len(profile_opens)} closes={n} active_estimate={max(0, len(profile_opens)-n)}")
+        lines.append(f"net={total_net:+.2f}$ gross={total_gross:+.2f}$ costs=-{total_costs:.2f}$ wr={wr:.1f}% reasons={dict(reasons)}")
+        lines.append(f"best_symbols={[(s, round(v, 3), sym_n[s]) for s, v in best]}")
+        lines.append(f"worst_symbols={[(s, round(v, 3), sym_n[s]) for s, v in worst]}")
+
     lines.append("")
     lines.append("RECENT CLOSES:")
-    for x in closes[-40:]:
+    for x in closes[-60:]:
         lines.append(
-            f"{x['symbol']:10s} net={sf(x['net']):+6.2f}$ move={sf(x['move']):+5.2f}% "
+            f"{x.get('profile','?'):7s} {x['symbol']:10s} net={sf(x['net']):+6.2f}$ move={sf(x['move']):+5.2f}% "
             f"mfe={sf(x['mfe']):+5.2f}% mae={sf(x['mae']):+5.2f}% "
             f"pc={sf(x['pc']):+5.2f}% vol=x{sf(x['vol']):4.1f} spread={sf(x['spread']):4.1f} "
             f"rank={x['rank']} imb5={sf(x['imb']):+4.2f}"
