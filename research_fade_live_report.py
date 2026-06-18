@@ -81,7 +81,10 @@ def main(stdout=False):
     lines.append("=" * 90)
     lines.append(f"RESEARCH FADE V1 LIVE SHADOW REPORT UTC={ts()}")
     lines.append("=" * 90)
-    lines.append(f"opens={len(opens)} closes={n} active_estimate={max(0, len(opens)-n)}")
+    active_estimate = max(0, len(opens)-n)
+    lines.append(f"opens={len(opens)} closes={n} active_estimate={active_estimate}")
+    if len(opens) > 0 and n == 0:
+        lines.append("WARNING: fade has opens but zero closes. Check fade_shadow.update_price wiring or TTL closing.")
     lines.append(f"net={total_net:+.2f}$ gross={total_gross:+.2f}$ costs=-{total_costs:.2f}$ wr={wr:.1f}% reasons={dict(reasons)}")
     lines.append(f"best_symbols={[(s, round(v, 3), sym_n[s]) for s, v in best]}")
     lines.append(f"worst_symbols={[(s, round(v, 3), sym_n[s]) for s, v in worst]}")

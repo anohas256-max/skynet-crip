@@ -741,6 +741,10 @@ async def scan_futures():
                         for s_name, book in books.items():
                             await eng.manage_open_trade(s_name, book, symbol, clean_symbol, price, current_time, time_str, dry_live)
 
+                        # Research-only SHORT fade shadow tracker.
+                        # Important: update on every ticker price tick, otherwise OPEN trades never close by TTL.
+                        fade_shadow.update_price(symbol, clean_symbol, price, current_time, time_str)
+
                         # Manage V11.3 pending confirmation entries.
                         await update_pending_confirmations(
                             pending_confirms,
