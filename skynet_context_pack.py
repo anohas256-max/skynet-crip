@@ -325,7 +325,7 @@ Current architecture:
 
     write(report_dir / "11_research_fade_live_report.txt", run(f"{ROOT}/.venv/bin/python {ROOT}/research_fade_live_report.py --stdout", timeout=20))
 
-    write(report_dir / "12_offline_edge_hunter.txt", run(f"{ROOT}/.venv/bin/python {ROOT}/offline_edge_hunter.py --stdout", timeout=90))
+    write(report_dir / "12_offline_edge_hunter.txt", run(f"{ROOT}/.venv/bin/python {ROOT}/offline_edge_hunter.py --stdout", timeout=180))
 
     # copy tracked code files
     tracked = run("git ls-files").splitlines()

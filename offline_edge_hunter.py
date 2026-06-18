@@ -418,6 +418,7 @@ def main():
     ap.add_argument("--min-test", type=int, default=12)
     ap.add_argument("--top", type=int, default=100)
     ap.add_argument("--stdout", action="store_true")
+    ap.add_argument("--full-v18", action="store_true", help="run heavy V18 full grid")
     args = ap.parse_args()
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -436,9 +437,12 @@ def main():
     all_found.extend(v17)
     lines.append("\n".join(notes17))
 
-    v18, notes18 = scan_v18(args.min_train, args.min_test)
-    all_found.extend(v18)
-    lines.append("\n".join(notes18))
+    if args.full_v18:
+        v18, notes18 = scan_v18(args.min_train, args.min_test)
+        all_found.extend(v18)
+        lines.append("\n".join(notes18))
+    else:
+        lines.append("V18 full grid skipped by default to keep context-pack fast. Use --full-v18 manually.")
 
     csv_notes, csv_previews = scan_backtest_csvs()
     lines.append("\n".join(csv_notes))
