@@ -78,7 +78,7 @@ def write_v12_event(candidate: dict, stage: str, note: str = ""):
 
 
 
-async def dump_log_always(log_interval, date_postfix, books, dry_live, skip_tracker):
+async def dump_log_always(log_interval, date_postfix, books, dry_live, skip_tracker, fade_shadow=None):
     filename = f"skynet_{log_interval}.log"
 
     if not os.path.exists(filename) or os.path.getsize(filename) == 0:
@@ -95,8 +95,9 @@ async def dump_log_always(log_interval, date_postfix, books, dry_live, skip_trac
         f.write("\n")
         f.write(skip_tracker.format_report())
         f.write("\n")
-        f.write(fade_shadow.format_report())
-        f.write("\n")
+        if fade_shadow is not None:
+            f.write(fade_shadow.format_report())
+            f.write("\n")
         if hasattr(eng, "format_smart_v2_report"):
             f.write(eng.format_smart_v2_report())
             f.write("\n")
@@ -1011,13 +1012,13 @@ async def scan_futures():
                     # --- FILE DUMPS ---
                     date_postfix = time.strftime("%Y-%m-%d_%H-%M")
                     if current_time - last_dump_3h >= 10800:
-                        await dump_log_always("3h", date_postfix, books, dry_live, skip_tracker)
+                        await dump_log_always("3h", date_postfix, books, dry_live, skip_tracker, fade_shadow)
                         last_dump_3h = current_time
                     if current_time - last_dump_12h >= 43200:
-                        await dump_log_always("12h", date_postfix, books, dry_live, skip_tracker)
+                        await dump_log_always("12h", date_postfix, books, dry_live, skip_tracker, fade_shadow)
                         last_dump_12h = current_time
                     if current_time - last_dump_48h >= 172800:
-                        await dump_log_always("48h", date_postfix, books, dry_live, skip_tracker)
+                        await dump_log_always("48h", date_postfix, books, dry_live, skip_tracker, fade_shadow)
                         last_dump_48h = current_time
 
                     await asyncio.sleep(5)
