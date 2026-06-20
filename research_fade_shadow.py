@@ -47,11 +47,12 @@ class ResearchFadeV1Shadow:
 
     NAME = "RESEARCH_FADE_V1_SHADOW"
 
-    # V2 profiles based on:
-    # - offline robust V17:
-    #   SHORT ABS030|SP2/SP3|R150|V5|IMB_ASK/IMB_ASK10
-    # - live result:
-    #   WIDE is positive but too loose; losses came from weak/medium signals.
+    # V3 idea:
+    # Do NOT hard-block potentially good trades.
+    # Split signals into lanes:
+    # - CORE: stricter offline-robust fade
+    # - HF_TEST: more trades, shadow-only, measured separately
+    # - SPIKE: violent move fade, still controlled
     PROFILES = [
         {
             "name": "CORE_SP2_ASK10",
@@ -70,18 +71,26 @@ class ResearchFadeV1Shadow:
             "max_rank": 150,
         },
         {
-            "name": "WIDE_SPIKE",
+            "name": "HF_SP5_ASK10",
+            "max_spread": 5.0,
+            "imb5_max": -0.10,
+            "min_abs_pc": 0.30,
+            "min_vol": 5.0,
+            "max_rank": 80,
+        },
+        {
+            "name": "SPIKE_SP7",
             "max_spread": 7.0,
-            "imb5_max": -0.15,
+            "imb5_max": -0.05,
             "min_abs_pc": 0.70,
             "min_vol": 8.0,
-            "max_rank": 40,
+            "max_rank": 60,
         },
     ]
 
-    # Fade-only temporary blocklist from offline/live weak symbols.
-    # This does not affect normal long selectors.
-    BLOCK_SYMBOLS = {
+    # Soft quarantine only for reporting. We do NOT block these symbols.
+    # They still open in shadow, but report can show them separately.
+    QUARANTINE_SYMBOLS = {
         "FET", "XPL", "INJ", "TIA", "VVV", "BILL", "UNI"
     }
 
@@ -114,9 +123,6 @@ class ResearchFadeV1Shadow:
         if not symbol:
             return False, "NO_SYMBOL"
 
-        clean_symbol = cand.get("clean_symbol") or symbol.replace("_USDT", "")
-        if clean_symbol in self.BLOCK_SYMBOLS:
-            return False, f"FADE_BLOCKED_{clean_symbol}"
 
         key = self._active_key(profile["name"], symbol)
         if key in self.active:
