@@ -982,3 +982,36 @@ REJECT_OBSERVER_MIN_ABS_PRICE_CHANGE = 0.20
 # Avoid infinite duplicated reject watches from many similar strategies.
 REJECT_OBSERVER_REASON_PREFIX = "REJECT_"
 
+
+
+# ============================================================
+# COST AWARE V1 / YELLOW FAST / DEPTH THIN ESCAPE
+# ============================================================
+COST_AWARE_ENABLED = True
+
+# Current heavy taker model ~= 29bps breakeven.
+# We demand at least some expected move buffer.
+COST_GATE_MIN_PC_LONG = 0.30
+COST_GATE_MIN_VOL_LONG = 8.0
+COST_GATE_MIN_SCORE_LONG = 3
+COST_GATE_MAX_SPREAD_LONG_BPS = 5.0
+
+YELLOW_SCORE3_FAST_ENABLED = True
+YELLOW_SCORE3_FAST_MIN_PC = 0.30
+YELLOW_SCORE3_FAST_MAX_PC = 0.50
+YELLOW_SCORE3_FAST_MIN_VOL = 8.0
+YELLOW_SCORE3_FAST_MIN_TREND = 0.20
+YELLOW_SCORE3_FAST_MIN_BTC = -0.05
+YELLOW_SCORE3_FAST_MIN_OI = -1.0
+YELLOW_SCORE3_FAST_MAX_STRUCT = 3
+YELLOW_SCORE3_FAST_MAX_BRISK = 4
+YELLOW_SCORE3_FAST_MAX_FB = 2
+
+# Do not disable DEPTH_THIN globally.
+# Only observe an escape lane when the rejected signal is unusually strong.
+DEPTH_THIN_ESCAPE_ENABLED = True
+DEPTH_THIN_ESCAPE_MIN_SCORE = 5
+DEPTH_THIN_ESCAPE_MIN_VOL = 15.0
+DEPTH_THIN_ESCAPE_MIN_PC = 0.30
+DEPTH_THIN_ESCAPE_MAX_RANK = 80
+

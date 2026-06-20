@@ -1499,8 +1499,62 @@ def is_safe_strict_rule(c):
     )
 
 
+
+def cost_gate_long(c: dict) -> bool:
+    """Cheap cost-aware guard for long shadow candidates."""
+    if not getattr(cfg, "COST_AWARE_ENABLED", True):
+        return True
+
+    try:
+        score = float(c.get("score", -999))
+        pc = float(c.get("price_change", 0.0))
+        vol = float(c.get("vol_ratio", 0.0))
+        spread = float(c.get("spread_bps", 999.0))
+    except Exception:
+        return False
+
+    if score < float(getattr(cfg, "COST_GATE_MIN_SCORE_LONG", 3)):
+        return False
+    if pc < float(getattr(cfg, "COST_GATE_MIN_PC_LONG", 0.30)):
+        return False
+    if vol < float(getattr(cfg, "COST_GATE_MIN_VOL_LONG", 8.0)):
+        return False
+    if spread > float(getattr(cfg, "COST_GATE_MAX_SPREAD_LONG_BPS", 5.0)):
+        return False
+
+    return True
+
+
+def is_depth_thin_escape_candidate(c: dict) -> bool:
+    """Strong rejected DEPTH_THIN signal that deserves shadow observation."""
+    if not getattr(cfg, "DEPTH_THIN_ESCAPE_ENABLED", True):
+        return False
+
+    try:
+        score = float(c.get("score", -999))
+        pc = abs(float(c.get("price_change", 0.0)))
+        vol = float(c.get("vol_ratio", 0.0))
+        rank = float(c.get("current_turnover_rank", 999999))
+    except Exception:
+        return False
+
+    return (
+        score >= float(getattr(cfg, "DEPTH_THIN_ESCAPE_MIN_SCORE", 5))
+        and vol >= float(getattr(cfg, "DEPTH_THIN_ESCAPE_MIN_VOL", 15.0))
+        and pc >= float(getattr(cfg, "DEPTH_THIN_ESCAPE_MIN_PC", 0.30))
+        and rank <= float(getattr(cfg, "DEPTH_THIN_ESCAPE_MAX_RANK", 80))
+    )
+
+
+
 def should_enter_strategy(scfg: cfg.StrategyConfig, c: dict) -> bool:
     f = scfg.family
+
+    # COST_AWARE_V1:
+    # Do not spend taker-like costs on microscopic long moves.
+    # Keep reject observer active separately; this gate only affects entries.
+    if f not in ("yellow_score2", "yellow_score2_tight") and not cost_gate_long(c):
+        return False
 
     if f == "safe_045":
         return is_safe_rule(c)
@@ -1716,6 +1770,19 @@ def should_enter_strategy(scfg: cfg.StrategyConfig, c: dict) -> bool:
 
     if f == "yellow_score3":
         return c["score"] == 3 and 0.25 <= c["price_change"] <= 0.45 and c["trend_15m"] > 0 and c["btc_5m_change"] > -0.10 and c["oi_change"] > -2.0
+
+    if f == "yellow_score3_fast":
+        return (
+            c["score"] == 3
+            and getattr(cfg, "YELLOW_SCORE3_FAST_MIN_PC", 0.30) <= c["price_change"] <= getattr(cfg, "YELLOW_SCORE3_FAST_MAX_PC", 0.50)
+            and c["vol_ratio"] >= getattr(cfg, "YELLOW_SCORE3_FAST_MIN_VOL", 8.0)
+            and c["trend_15m"] >= getattr(cfg, "YELLOW_SCORE3_FAST_MIN_TREND", 0.20)
+            and c["btc_5m_change"] >= getattr(cfg, "YELLOW_SCORE3_FAST_MIN_BTC", -0.05)
+            and c["oi_change"] >= getattr(cfg, "YELLOW_SCORE3_FAST_MIN_OI", -1.0)
+            and c.get("structure_risk", 0) <= getattr(cfg, "YELLOW_SCORE3_FAST_MAX_STRUCT", 3)
+            and c.get("breakout_risk_score", 0) <= getattr(cfg, "YELLOW_SCORE3_FAST_MAX_BRISK", 4)
+            and c.get("false_breakouts_15m", 0) <= getattr(cfg, "YELLOW_SCORE3_FAST_MAX_FB", 2)
+        )
 
     if f == "yellow_score2":
         return c["score"] == 2 and 0.25 <= c["price_change"] <= 0.45 and c["trend_15m"] > 0 and c["btc_5m_change"] > -0.10 and c["oi_change"] > -2.0
