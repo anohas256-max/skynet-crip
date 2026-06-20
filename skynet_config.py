@@ -932,6 +932,7 @@ def build_strategy_configs():
         StrategyConfig("FILTERED_045", "filtered_045", 4.5, 0.8, silent=True),
         StrategyConfig("FOMO_TEST", "fomo_test", 3.0, 0.8, silent=True),
         StrategyConfig("YELLOW_SCORE3", "yellow_score3", 3.0, 0.8, silent=True),
+        StrategyConfig("YELLOW_SCORE3_FAST", "yellow_score3_fast", 3.0, 0.8, silent=True),
         StrategyConfig("YELLOW_SCORE2", "yellow_score2", 3.0, 0.8, silent=True),
         StrategyConfig("YELLOW_SCORE2_TIGHT", "yellow_score2_tight", 3.0, 0.8, silent=True),
     ]

@@ -42,6 +42,28 @@ DEFAULT_MARGIN = 3.0
 DEFAULT_LEVERAGE = 4.0
 DEFAULT_NOTIONAL = DEFAULT_MARGIN * DEFAULT_LEVERAGE
 
+STRATEGY_CONFIGS = cfg.build_strategy_configs()
+
+def lane_notional(row):
+    """
+    Use actual strategy margin/leverage when possible.
+    Important: YELLOW_SCORE3 is 3$ * 10x = 30$ notional,
+    while META/fade may be 3$ * 4x = 12$.
+    """
+    kind = row.get("kind", "")
+    lane = row.get("lane", "")
+
+    if kind == "FADE_SHORT":
+        margin = float(getattr(cfg, "RESEARCH_FADE_V1_MARGIN", DEFAULT_MARGIN))
+        leverage = float(getattr(cfg, "RESEARCH_FADE_V1_LEVERAGE", DEFAULT_LEVERAGE))
+        return margin * leverage
+
+    scfg = STRATEGY_CONFIGS.get(lane)
+    if scfg is not None:
+        return float(getattr(scfg, "margin", DEFAULT_MARGIN)) * float(getattr(scfg, "leverage", DEFAULT_LEVERAGE))
+
+    return DEFAULT_NOTIONAL
+
 shadow_close_re = re.compile(
     r"SHADOW_CLOSE \| (?P<strat>[^|]+) \| (?P<sym>[A-Z0-9]+) \| (?P<reason>[^|]+) \| "
     r".*?Gross:(?P<gross>[+-]?\d+\.\d+)\$ Net:(?P<net>[+-]?\d+\.\d+)\$ Cost:(?P<cost>\d+\.\d+)\$ "
@@ -58,7 +80,7 @@ def scenario_cost_bps(s):
     return s["commission_per_side_bps"] * 2 + s["spread_bps"] + s["slippage_per_side_bps"] * 2
 
 def scenario_cost_usd(s, notional=DEFAULT_NOTIONAL):
-    return notional * scenario_cost_bps(s) / 10000.0
+    return float(notional) * scenario_cost_bps(s) / 10000.0
 
 def metrics(vals):
     n = len(vals)
@@ -140,7 +162,7 @@ def main():
 
         for name, s in SCENARIOS.items():
             # approximate repricing: keep observed gross, replace modeled cost
-            cost = scenario_cost_usd(s)
+            cost = scenario_cost_usd(s, lane_notional(r))
             new_net = r["gross"] - cost
             scenario_lane[name][key].append(new_net)
             scenario_symbol[name][r["sym"]].append(new_net)
@@ -198,7 +220,8 @@ def main():
     for r in cost_killed[:120]:
         out.append(
             f"{r['kind']:<12} {r['lane']:<38} {r['sym']:<8} gross={r['gross']:+.2f}$ "
-            f"net={r['net']:+.2f}$ cost={r['cost']:.2f}$ mfe={r['mfe']:+.2f}% mae={r['mae']:+.2f}% reason={r['reason']}"
+            f"net={r['net']:+.2f}$ cost={r['cost']:.2f}$ notional=${lane_notional(r):.2f} "
+            f"mfe={r['mfe']:+.2f}% mae={r['mae']:+.2f}% reason={r['reason']}"
         )
 
     out.append("")
@@ -208,7 +231,8 @@ def main():
     for r in weak_mfe[:160]:
         out.append(
             f"{r['kind']:<12} {r['lane']:<38} {r['sym']:<8} gross={r['gross']:+.2f}$ "
-            f"net={r['net']:+.2f}$ cost={r['cost']:.2f}$ mfe={r['mfe']:+.2f}% mae={r['mae']:+.2f}% reason={r['reason']}"
+            f"net={r['net']:+.2f}$ cost={r['cost']:.2f}$ notional=${lane_notional(r):.2f} "
+            f"mfe={r['mfe']:+.2f}% mae={r['mae']:+.2f}% reason={r['reason']}"
         )
 
     out.append("")
