@@ -47,9 +47,22 @@ class ResearchFadeV1Shadow:
 
     NAME = "RESEARCH_FADE_V1_SHADOW"
 
+    # V2 profiles based on:
+    # - offline robust V17:
+    #   SHORT ABS030|SP2/SP3|R150|V5|IMB_ASK/IMB_ASK10
+    # - live result:
+    #   WIDE is positive but too loose; losses came from weak/medium signals.
     PROFILES = [
         {
-            "name": "STRICT",
+            "name": "CORE_SP2_ASK10",
+            "max_spread": 2.0,
+            "imb5_max": -0.10,
+            "min_abs_pc": 0.30,
+            "min_vol": 5.0,
+            "max_rank": 150,
+        },
+        {
+            "name": "CORE_SP3_ASK20",
             "max_spread": 3.0,
             "imb5_max": -0.20,
             "min_abs_pc": 0.30,
@@ -57,22 +70,20 @@ class ResearchFadeV1Shadow:
             "max_rank": 150,
         },
         {
-            "name": "MID",
-            "max_spread": 5.0,
-            "imb5_max": -0.10,
-            "min_abs_pc": 0.30,
-            "min_vol": 5.0,
-            "max_rank": 150,
-        },
-        {
-            "name": "WIDE",
+            "name": "WIDE_SPIKE",
             "max_spread": 7.0,
-            "imb5_max": 0.00,
-            "min_abs_pc": 0.30,
-            "min_vol": 5.0,
-            "max_rank": 150,
+            "imb5_max": -0.15,
+            "min_abs_pc": 0.70,
+            "min_vol": 8.0,
+            "max_rank": 40,
         },
     ]
+
+    # Fade-only temporary blocklist from offline/live weak symbols.
+    # This does not affect normal long selectors.
+    BLOCK_SYMBOLS = {
+        "FET", "XPL", "INJ", "TIA", "VVV", "BILL", "UNI"
+    }
 
     def __init__(self, log_fn):
         self.log = log_fn
@@ -102,6 +113,10 @@ class ResearchFadeV1Shadow:
         symbol = cand.get("symbol", "")
         if not symbol:
             return False, "NO_SYMBOL"
+
+        clean_symbol = cand.get("clean_symbol") or symbol.replace("_USDT", "")
+        if clean_symbol in self.BLOCK_SYMBOLS:
+            return False, f"FADE_BLOCKED_{clean_symbol}"
 
         key = self._active_key(profile["name"], symbol)
         if key in self.active:

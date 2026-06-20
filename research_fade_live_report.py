@@ -86,7 +86,7 @@ def main(stdout=False):
     lines.append("=" * 90)
     lines.append(f"RESEARCH FADE V1 LIVE SHADOW REPORT UTC={ts()}")
     lines.append("=" * 90)
-    lines.append(f"opens={len(opens)} closes={len(closes)} active_estimate={max(0, len(opens)-len(closes))}")
+    lines.append(f"opens={len(opens)} closes={len(closes)} active_estimate={max(0, len(opens)-len(closes))}")\n    lines.append("profiles_v2=CORE_SP2_ASK10,CORE_SP3_ASK20,WIDE_SPIKE; old STRICT/MID/WIDE are historical if present")
 
     if len(opens) > 0 and len(closes) == 0:
         lines.append("WARNING: fade has opens but zero closes. Check direct polling / TTL close wiring.")
