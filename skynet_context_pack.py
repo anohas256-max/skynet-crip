@@ -317,7 +317,7 @@ Current architecture:
         run("for f in $(find /root/skynet -maxdepth 1 -type f -name '*.txt' | sort | tail -10); do echo '---' $f; tail -80 \"$f\"; done", timeout=20),
     ]))
 
-    write(report_dir / "08_code_compile_check.txt", run(f"{ROOT}/.venv/bin/python -m py_compile skynet_config.py skynet_engine.py skynet_main.py skynet_live_mexc.py skynet_lab_report.py research_fade_lab.py research_fade_shadow.py research_fade_live_report.py offline_edge_hunter.py", timeout=30))
+    write(report_dir / "08_code_compile_check.txt", run(f"{ROOT}/.venv/bin/python -m py_compile skynet_config.py skynet_engine.py skynet_main.py skynet_live_mexc.py skynet_lab_report.py research_fade_lab.py research_fade_shadow.py research_fade_live_report.py offline_edge_hunter.py high_freq_opportunity_lab.py false_negative_filter_lab.py", timeout=30))
 
     write(report_dir / "09_lab_report.txt", run(f"{ROOT}/.venv/bin/python {ROOT}/skynet_lab_report.py --stdout", timeout=40))
 
@@ -326,6 +326,10 @@ Current architecture:
     write(report_dir / "11_research_fade_live_report.txt", run(f"{ROOT}/.venv/bin/python {ROOT}/research_fade_live_report.py --stdout", timeout=20))
 
     write(report_dir / "12_offline_edge_hunter.txt", run(f"{ROOT}/.venv/bin/python {ROOT}/offline_edge_hunter.py --stdout", timeout=180))
+
+    write(report_dir / "13_false_negative_filter_lab.txt", run(f"{ROOT}/.venv/bin/python {ROOT}/false_negative_filter_lab.py", timeout=60))
+
+    write(report_dir / "14_high_freq_opportunity_lab.txt", run(f"{ROOT}/.venv/bin/python {ROOT}/high_freq_opportunity_lab.py", timeout=60))
 
     # copy tracked code files
     tracked = run("git ls-files").splitlines()
