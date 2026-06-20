@@ -1015,3 +1015,51 @@ DEPTH_THIN_ESCAPE_MIN_VOL = 15.0
 DEPTH_THIN_ESCAPE_MIN_PC = 0.30
 DEPTH_THIN_ESCAPE_MAX_RANK = 80
 
+
+
+# ============================================================
+# EXECUTION COST MODEL V2
+# ============================================================
+# Core idea:
+# Do not let strategies spend taker-like costs on moves that cannot
+# realistically survive fees + spread + slippage.
+#
+# Units: bps. 1 bps = 0.01%.
+#
+# Current conservative model:
+#   taker 8 bps per side + spread + slippage.
+# If actual account fee is lower, change these constants after verification,
+# not by hope.
+EXEC_COST_MODEL_ENABLED = True
+
+EXEC_FEE_TAKER_BPS_PER_SIDE = 8.0
+EXEC_FEE_MAKER_BPS_PER_SIDE = 0.0
+
+EXEC_DEFAULT_SLIPPAGE_BPS_PER_SIDE = 5.0
+EXEC_MIN_SPREAD_BPS_FLOOR = 1.0
+
+# Cost buffer:
+# 1.0 = expected move only equals breakeven
+# 1.5 = expected move must be 50% bigger than breakeven
+# 2.0 = aggressive safety
+EXEC_COST_BUFFER_NORMAL = 1.60
+EXEC_COST_BUFFER_FAST = 1.30
+EXEC_COST_BUFFER_ESCAPE = 1.20
+
+# Absolute minimums for taker-like scalping.
+# Even if formula says lower, do not trade tiny moves.
+EXEC_MIN_EXPECTED_MOVE_BPS_NORMAL = 35.0
+EXEC_MIN_EXPECTED_MOVE_BPS_FAST = 30.0
+EXEC_MIN_EXPECTED_MOVE_BPS_ESCAPE = 30.0
+
+# How we estimate expected move from current signal.
+# Current signal price_change is in percent, so 0.35% = 35 bps.
+# We do NOT assume full current impulse will continue.
+EXEC_EXPECTED_MOVE_MULTIPLIER_NORMAL = 0.85
+EXEC_EXPECTED_MOVE_MULTIPLIER_FAST = 0.90
+EXEC_EXPECTED_MOVE_MULTIPLIER_ESCAPE = 0.80
+
+# Gross-positive but cost-killed trades should go to observer/shadow,
+# not into real.
+EXEC_COST_GATE_LOG_PREFIX = "COST_GATE"
+

@@ -600,6 +600,11 @@ def reject_reason_for_strategy(scfg, candidate: dict) -> str:
         return "REJECT_RULES_NOT_MET_PARSE_FAIL"
 
     # Not exact per-family internals, but enough to price which gates are killing opportunities.
+    lane = "fast" if family in ("yellow_score3", "yellow_score3_fast") else "normal"
+    if not cost_gate_long(candidate, lane=lane, mode="taker"):
+        bits.append("COST_GATE_FAIL")
+        bits.append(cost_gate_debug(candidate, lane=lane, mode="taker").replace(" ", "_"))
+
     if score < 3:
         bits.append("SCORE_LOW")
     if abs(pc) < 0.20:
@@ -1500,14 +1505,83 @@ def is_safe_strict_rule(c):
 
 
 
-def cost_gate_long(c: dict) -> bool:
-    """Cheap cost-aware guard for long shadow candidates."""
+
+def execution_roundtrip_cost_bps(c: dict, mode: str = "taker") -> float:
+    """
+    Estimated roundtrip cost in bps:
+    entry fee + exit fee + spread + entry slippage + exit slippage.
+    """
+    if not getattr(cfg, "EXEC_COST_MODEL_ENABLED", True):
+        return 0.0
+
+    try:
+        spread = float(c.get("spread_bps", getattr(cfg, "SPREAD_BPS", 3.0)))
+    except Exception:
+        spread = float(getattr(cfg, "SPREAD_BPS", 3.0))
+
+    spread = max(spread, float(getattr(cfg, "EXEC_MIN_SPREAD_BPS_FLOOR", 1.0)))
+
+    if mode == "maker":
+        fee_side = float(getattr(cfg, "EXEC_FEE_MAKER_BPS_PER_SIDE", 0.0))
+        # maker is not free in reality: queue miss/adverse selection still exists,
+        # but direct slippage is lower than taker.
+        slip_side = min(float(getattr(cfg, "EXEC_DEFAULT_SLIPPAGE_BPS_PER_SIDE", 5.0)), 1.0)
+    else:
+        fee_side = float(getattr(cfg, "EXEC_FEE_TAKER_BPS_PER_SIDE", 8.0))
+        slip_side = float(getattr(cfg, "EXEC_DEFAULT_SLIPPAGE_BPS_PER_SIDE", 5.0))
+
+    return fee_side * 2.0 + spread + slip_side * 2.0
+
+
+def expected_move_bps(c: dict, lane: str = "normal") -> float:
+    """
+    Very conservative expected move proxy.
+    price_change is current impulse in percent.
+    We only assume part of it is capturable.
+    """
+    try:
+        pc_bps = abs(float(c.get("price_change", 0.0))) * 100.0
+    except Exception:
+        pc_bps = 0.0
+
+    if lane == "fast":
+        mult = float(getattr(cfg, "EXEC_EXPECTED_MOVE_MULTIPLIER_FAST", 0.90))
+    elif lane == "escape":
+        mult = float(getattr(cfg, "EXEC_EXPECTED_MOVE_MULTIPLIER_ESCAPE", 0.80))
+    else:
+        mult = float(getattr(cfg, "EXEC_EXPECTED_MOVE_MULTIPLIER_NORMAL", 0.85))
+
+    return pc_bps * mult
+
+
+def required_move_bps(c: dict, lane: str = "normal", mode: str = "taker") -> float:
+    cost = execution_roundtrip_cost_bps(c, mode=mode)
+
+    if lane == "fast":
+        buf = float(getattr(cfg, "EXEC_COST_BUFFER_FAST", 1.30))
+        floor = float(getattr(cfg, "EXEC_MIN_EXPECTED_MOVE_BPS_FAST", 30.0))
+    elif lane == "escape":
+        buf = float(getattr(cfg, "EXEC_COST_BUFFER_ESCAPE", 1.20))
+        floor = float(getattr(cfg, "EXEC_MIN_EXPECTED_MOVE_BPS_ESCAPE", 30.0))
+    else:
+        buf = float(getattr(cfg, "EXEC_COST_BUFFER_NORMAL", 1.60))
+        floor = float(getattr(cfg, "EXEC_MIN_EXPECTED_MOVE_BPS_NORMAL", 35.0))
+
+    return max(floor, cost * buf)
+
+
+def cost_gate_long(c: dict, lane: str = "normal", mode: str = "taker") -> bool:
+    """
+    Cost-aware long gate.
+    Rejects tiny gross-positive signals that are likely to become net-negative.
+    """
     if not getattr(cfg, "COST_AWARE_ENABLED", True):
+        return True
+    if not getattr(cfg, "EXEC_COST_MODEL_ENABLED", True):
         return True
 
     try:
         score = float(c.get("score", -999))
-        pc = float(c.get("price_change", 0.0))
         vol = float(c.get("vol_ratio", 0.0))
         spread = float(c.get("spread_bps", 999.0))
     except Exception:
@@ -1515,14 +1589,32 @@ def cost_gate_long(c: dict) -> bool:
 
     if score < float(getattr(cfg, "COST_GATE_MIN_SCORE_LONG", 3)):
         return False
-    if pc < float(getattr(cfg, "COST_GATE_MIN_PC_LONG", 0.30)):
-        return False
     if vol < float(getattr(cfg, "COST_GATE_MIN_VOL_LONG", 8.0)):
         return False
     if spread > float(getattr(cfg, "COST_GATE_MAX_SPREAD_LONG_BPS", 5.0)):
         return False
 
-    return True
+    exp_bps = expected_move_bps(c, lane=lane)
+    req_bps = required_move_bps(c, lane=lane, mode=mode)
+
+    return exp_bps >= req_bps
+
+
+def cost_gate_debug(c: dict, lane: str = "normal", mode: str = "taker") -> str:
+    try:
+        exp_bps = expected_move_bps(c, lane=lane)
+        req_bps = required_move_bps(c, lane=lane, mode=mode)
+        cost_bps = execution_roundtrip_cost_bps(c, mode=mode)
+        spread = float(c.get("spread_bps", 999.0))
+        pc = float(c.get("price_change", 0.0))
+        vol = float(c.get("vol_ratio", 0.0))
+        score = c.get("score", "-")
+        return (
+            f"exp={exp_bps:.1f}bps req={req_bps:.1f}bps cost={cost_bps:.1f}bps "
+            f"pc={pc:+.2f}% vol=x{vol:.1f} spread={spread:.2f}bps score={score}"
+        )
+    except Exception as e:
+        return f"cost_debug_error={e}"
 
 
 def is_depth_thin_escape_candidate(c: dict) -> bool:
@@ -1553,8 +1645,10 @@ def should_enter_strategy(scfg: cfg.StrategyConfig, c: dict) -> bool:
     # COST_AWARE_V1:
     # Do not spend taker-like costs on microscopic long moves.
     # Keep reject observer active separately; this gate only affects entries.
-    if f not in ("yellow_score2", "yellow_score2_tight") and not cost_gate_long(c):
-        return False
+    if f not in ("yellow_score2", "yellow_score2_tight"):
+        lane = "fast" if f in ("yellow_score3", "yellow_score3_fast") else "normal"
+        if not cost_gate_long(c, lane=lane, mode="taker"):
+            return False
 
     if f == "safe_045":
         return is_safe_rule(c)

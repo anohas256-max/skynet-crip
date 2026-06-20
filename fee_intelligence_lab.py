@@ -2,6 +2,7 @@ import re
 from pathlib import Path
 from collections import defaultdict
 from datetime import datetime, timezone
+import skynet_config as cfg
 
 LOGS = [Path("skynet_3h.log"), Path("skynet_12h.log"), Path("skynet_48h.log")]
 
@@ -10,6 +11,11 @@ LOGS = [Path("skynet_3h.log"), Path("skynet_12h.log"), Path("skynet_48h.log")]
 # SPREAD_BPS=3
 # SLIPPAGE_BPS=5 per side
 SCENARIOS = {
+    "ACTIVE_CONFIG_TAKER": {
+        "commission_per_side_bps": float(getattr(cfg, "EXEC_FEE_TAKER_BPS_PER_SIDE", 8.0)),
+        "spread_bps": float(getattr(cfg, "SPREAD_BPS", 3.0)),
+        "slippage_per_side_bps": float(getattr(cfg, "EXEC_DEFAULT_SLIPPAGE_BPS_PER_SIDE", 5.0)),
+    },
     "CURRENT_CFG_TAKER_HEAVY": {
         "commission_per_side_bps": 8.0,
         "spread_bps": 3.0,
