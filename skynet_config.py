@@ -962,3 +962,23 @@ RESEARCH_FADE_V1_IMB5_MAX = float(os.getenv("RESEARCH_FADE_V1_IMB5_MAX", "-0.20"
 RESEARCH_FADE_V1_MAX_OPEN_TOTAL = int(os.getenv("RESEARCH_FADE_V1_MAX_OPEN_TOTAL", "9"))
 RESEARCH_FADE_V1_MAX_OPEN_PER_PROFILE = int(os.getenv("RESEARCH_FADE_V1_MAX_OPEN_PER_PROFILE", "3"))
 RESEARCH_FADE_V1_POLL_SECONDS = float(os.getenv("RESEARCH_FADE_V1_POLL_SECONDS", "20"))
+
+
+# ============================================================
+# REJECT OBSERVER V1
+# Tracks virtual trades that were rejected by filters/rules.
+# This does NOT affect real/dry execution; it only answers:
+# "what would have happened if this filter did not reject?"
+# ============================================================
+REJECT_OBSERVER_ENABLED = True
+REJECT_OBSERVER_TRACK_RULES_NOT_MET = True
+REJECT_OBSERVER_TRACK_CAN_OPEN = True
+
+# Do not observe every tiny trash signal. Keep volume useful but controlled.
+REJECT_OBSERVER_MIN_SCORE = 3
+REJECT_OBSERVER_MIN_VOL_RATIO = 8.0
+REJECT_OBSERVER_MIN_ABS_PRICE_CHANGE = 0.20
+
+# Avoid infinite duplicated reject watches from many similar strategies.
+REJECT_OBSERVER_REASON_PREFIX = "REJECT_"
+

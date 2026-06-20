@@ -513,9 +513,24 @@ async def update_pending_confirmations(pending_confirms, symbol, clean_symbol, p
 
         skip_reasons = []
         if not eng.can_open_strategy(s_name, book, symbol, current_time, skip_reasons):
+            can_reason = ",".join(skip_reasons) if skip_reasons else "CAN_OPEN_FALSE"
+            if (
+                getattr(cfg, "REJECT_OBSERVER_TRACK_CAN_OPEN", True)
+                and getattr(book["config"], "skip_track", False)
+                and eng.should_observe_reject(pending["candidate"])
+            ):
+                skip_tracker.open(
+                    s_name,
+                    pending["candidate"],
+                    "REJECT_CONFIRM_CAN_OPEN_" + can_reason.replace(" ", "_").replace(":", ""),
+                    book["config"],
+                    current_time,
+                    time_str,
+                    force=True,
+                )
             write_to_logs(
                 f"[{time_str}] CONFIRM_DROP | {s_name} | {clean_symbol} | "
-                f"{','.join(skip_reasons) if skip_reasons else 'CAN_OPEN_FALSE'}\n"
+                f"{can_reason}\n"
             )
             continue
 
@@ -834,10 +849,29 @@ async def scan_futures():
                         skip_reasons = []
 
                         # 1) selector strategies collected for best-candidate selection.
+                        # REJECT_OBSERVER_V1:
+                        # If strategy rules reject a strong enough anomaly, we still open a virtual
+                        # rejected-opportunity watch. This does NOT affect dry/real execution.
                         for s_name in selector_names:
                             scfg = strategy_configs[s_name]
                             if eng.should_enter_strategy(scfg, candidate):
                                 selector_candidates[s_name].append(candidate)
+                            else:
+                                if (
+                                    getattr(cfg, "REJECT_OBSERVER_TRACK_RULES_NOT_MET", True)
+                                    and getattr(scfg, "skip_track", False)
+                                    and eng.should_observe_reject(candidate)
+                                ):
+                                    r_reason = eng.reject_reason_for_strategy(scfg, candidate)
+                                    skip_tracker.open(
+                                        s_name,
+                                        candidate,
+                                        r_reason,
+                                        scfg,
+                                        current_time,
+                                        time_str,
+                                        force=True,
+                                    )
 
                         # 2) non-selector legacy strategies opened immediately.
                         for s_name, scfg in strategy_configs.items():

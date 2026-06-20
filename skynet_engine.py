@@ -416,8 +416,8 @@ class SkipTracker:
             "hypo_costs": 0.0,
         }
 
-    def open(self, strategy_name, candidate, reason, scfg, current_time, time_str):
-        if not scfg.skip_track:
+    def open(self, strategy_name, candidate, reason, scfg, current_time, time_str, force=False):
+        if not scfg.skip_track and not force:
             return
 
         key = (strategy_name, candidate["symbol"], reason)
@@ -436,6 +436,7 @@ class SkipTracker:
             "tp": scfg.tp,
             "time": current_time,
             "reason": reason,
+            "observer_kind": "REJECT" if str(reason).startswith(getattr(cfg, "REJECT_OBSERVER_REASON_PREFIX", "REJECT_")) else "SKIP",
             "max_profit_pct": 0.0,
             "max_loss_pct": 0.0,
         }
@@ -444,7 +445,10 @@ class SkipTracker:
         log(
             f"[{time_str}] SKIP_TRACK_OPEN | {strategy_name} | {candidate['clean_symbol']} | "
             f"reason={reason} | entry={candidate['price']} | spread={candidate.get('spread_bps', 999):.2f}bps "
-            f"depth_reason={candidate.get('depth_reason','-')}\n"
+            f"depth_reason={candidate.get('depth_reason','-')} | "
+            f"obs={('REJECT' if str(reason).startswith(getattr(cfg, 'REJECT_OBSERVER_REASON_PREFIX', 'REJECT_')) else 'SKIP')} | "
+            f"score={candidate.get('score','-')} vol=x{candidate.get('vol_ratio',0):.1f} "
+            f"pc={candidate.get('price_change',0):+.2f}% rank={candidate.get('current_turnover_rank',999999)}\n"
         )
 
     def _learn_skip_outcome(self, w, net, reason, current_time, time_str):
@@ -537,7 +541,8 @@ class SkipTracker:
                 log(
                     f"[{time_str}] SKIP_TRACK_CLOSE | {w['strategy']} | {clean_symbol} | {reason} | "
                     f"original_skip={w['reason']} | HypoNet:{net:+.2f}$ | "
-                    f"MFE:+{w['max_profit_pct']:.2f}% MAE:{w['max_loss_pct']:.2f}%\n"
+                    f"MFE:+{w['max_profit_pct']:.2f}% MAE:{w['max_loss_pct']:.2f}% | "
+                    f"obs={w.get('observer_kind','SKIP')}\n"
                 )
                 self._learn_skip_outcome(w, net, reason, current_time, time_str)
             else:
@@ -553,6 +558,80 @@ class SkipTracker:
             f"WOULD_TIME:{st['WOULD_TIME']} | HypoNet:{st['hypo_net']:+.2f}$ | "
             f"HypoCosts:-${st['hypo_costs']:.2f} | Active:{len(self.active)}\n"
         )
+
+
+
+def should_observe_reject(candidate: dict) -> bool:
+    """Cheap guard to avoid observing every microscopic reject."""
+    if not getattr(cfg, "REJECT_OBSERVER_ENABLED", False):
+        return False
+
+    try:
+        score = float(candidate.get("score", -999))
+        vol = float(candidate.get("vol_ratio", 0.0))
+        pc = abs(float(candidate.get("price_change", 0.0)))
+    except Exception:
+        return False
+
+    return (
+        score >= float(getattr(cfg, "REJECT_OBSERVER_MIN_SCORE", 3))
+        and vol >= float(getattr(cfg, "REJECT_OBSERVER_MIN_VOL_RATIO", 8.0))
+        and pc >= float(getattr(cfg, "REJECT_OBSERVER_MIN_ABS_PRICE_CHANGE", 0.20))
+    )
+
+
+def reject_reason_for_strategy(scfg, candidate: dict) -> str:
+    """Compact reason label for a strategy that did not pass should_enter_strategy."""
+    family = str(getattr(scfg, "family", "unknown"))
+
+    bits = [f"RULES_NOT_MET_{family}"]
+
+    try:
+        score = float(candidate.get("score", -999))
+        vol = float(candidate.get("vol_ratio", 0.0))
+        pc = float(candidate.get("price_change", 0.0))
+        trend = float(candidate.get("trend_15m", 0.0))
+        btc = float(candidate.get("btc_5m_change", 0.0))
+        oi = float(candidate.get("oi_change", 0.0))
+        br = int(candidate.get("breakout_risk_score", 0))
+        fb = int(candidate.get("false_breakouts_15m", 0))
+        struct = int(candidate.get("structure_risk", 0))
+    except Exception:
+        return "REJECT_RULES_NOT_MET_PARSE_FAIL"
+
+    # Not exact per-family internals, but enough to price which gates are killing opportunities.
+    if score < 3:
+        bits.append("SCORE_LOW")
+    if abs(pc) < 0.20:
+        bits.append("PC_LOW")
+    if pc > 1.20:
+        bits.append("PC_HIGH")
+    if vol < 8:
+        bits.append("VOL_LOW")
+    if trend <= 0:
+        bits.append("TREND_WEAK")
+    if btc < -0.05:
+        bits.append("BTC_WEAK")
+    if oi < 0:
+        bits.append("OI_NEG")
+    if struct > 3:
+        bits.append("STRUCT_HIGH")
+    if br > 3:
+        bits.append("BRISK_HIGH")
+    if fb > 1:
+        bits.append("FB_HIGH")
+    if candidate.get("absorption_risk_long"):
+        bits.append("ABSORPTION")
+    if candidate.get("high_effort_low_result"):
+        bits.append("HIGH_EFFORT_LOW_RESULT")
+    if candidate.get("weak_long_result"):
+        bits.append("WEAK_LONG_RESULT")
+    if not candidate.get("initiative_buying_proxy", False):
+        bits.append("NO_INITIATIVE")
+
+    # Keep reason length sane for logs/grouping.
+    return "REJECT_" + "|".join(bits[:8])
+
 
 
 # ============================================================
@@ -1912,6 +1991,21 @@ async def process_selector_strategy(name, candidates, books, current_time, time_
         book["stats"]["depth_ok"] += 1
 
         if not can_open_strategy(name, book, cand["symbol"], current_time, skip_reasons):
+            if (
+                getattr(cfg, "REJECT_OBSERVER_TRACK_CAN_OPEN", True)
+                and getattr(scfg, "skip_track", False)
+                and should_observe_reject(cand)
+            ):
+                can_reason = ",".join(skip_reasons) if skip_reasons else "CAN_OPEN_FALSE"
+                skip_tracker.open(
+                    name,
+                    cand,
+                    "REJECT_CAN_OPEN_" + can_reason.replace(" ", "_").replace(":", ""),
+                    scfg,
+                    current_time,
+                    time_str,
+                    force=True,
+                )
             continue
 
         await open_shadow_trade(name, book, cand, current_time, time_str, dry_live)
