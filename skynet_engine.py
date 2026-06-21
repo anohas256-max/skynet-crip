@@ -1538,6 +1538,35 @@ def is_safe_strict_rule(c):
 
 
 
+
+def normalized_spread_bps(c: dict) -> tuple[float, bool]:
+    """
+    Returns (spread_bps, is_real_depth_value).
+
+    Before depth check candidate often has no spread_bps yet.
+    Old code treated missing spread as 999 and cost-gated everything too early.
+    For pre-depth cost model we use cfg.SPREAD_BPS as estimate.
+    Real spread hard rejection is allowed only when spread was actually measured.
+    """
+    raw = c.get("spread_bps", None)
+
+    try:
+        if raw is None:
+            return float(getattr(cfg, "SPREAD_BPS", 3.0)), False
+
+        spread = float(raw)
+
+        # 999/999.0 is our sentinel for "unknown/not measured", not a real spread.
+        if spread >= 900:
+            return float(getattr(cfg, "SPREAD_BPS", 3.0)), False
+
+        return spread, True
+
+    except Exception:
+        return float(getattr(cfg, "SPREAD_BPS", 3.0)), False
+
+
+
 def execution_roundtrip_cost_bps(c: dict, mode: str = "taker") -> float:
     """
     Estimated roundtrip cost in bps:
@@ -1546,11 +1575,7 @@ def execution_roundtrip_cost_bps(c: dict, mode: str = "taker") -> float:
     if not getattr(cfg, "EXEC_COST_MODEL_ENABLED", True):
         return 0.0
 
-    try:
-        spread = float(c.get("spread_bps", getattr(cfg, "SPREAD_BPS", 3.0)))
-    except Exception:
-        spread = float(getattr(cfg, "SPREAD_BPS", 3.0))
-
+    spread, _spread_is_real = normalized_spread_bps(c)
     spread = max(spread, float(getattr(cfg, "EXEC_MIN_SPREAD_BPS_FLOOR", 1.0)))
 
     if mode == "maker":
@@ -1615,7 +1640,7 @@ def cost_gate_long(c: dict, lane: str = "normal", mode: str = "taker") -> bool:
     try:
         score = float(c.get("score", -999))
         vol = float(c.get("vol_ratio", 0.0))
-        spread = float(c.get("spread_bps", 999.0))
+        spread, spread_is_real = normalized_spread_bps(c)
     except Exception:
         return False
 
@@ -1623,7 +1648,10 @@ def cost_gate_long(c: dict, lane: str = "normal", mode: str = "taker") -> bool:
         return False
     if vol < float(getattr(cfg, "COST_GATE_MIN_VOL_LONG", 8.0)):
         return False
-    if spread > float(getattr(cfg, "COST_GATE_MAX_SPREAD_LONG_BPS", 5.0)):
+
+    # Only reject wide spread if spread was actually measured.
+    # Pre-depth candidates must not be killed by sentinel 999.
+    if spread_is_real and spread > float(getattr(cfg, "COST_GATE_MAX_SPREAD_LONG_BPS", 5.0)):
         return False
 
     exp_bps = expected_move_bps(c, lane=lane)
@@ -1637,14 +1665,14 @@ def cost_gate_debug(c: dict, lane: str = "normal", mode: str = "taker") -> str:
         exp_bps = expected_move_bps(c, lane=lane)
         req_bps = required_move_bps(c, lane=lane, mode=mode)
         cost_bps = execution_roundtrip_cost_bps(c, mode=mode)
-        raw_spread = c.get("spread_bps", None)
-        spread = float(raw_spread) if raw_spread is not None else float(getattr(cfg, "SPREAD_BPS", 3.0))
+        spread, spread_is_real = normalized_spread_bps(c)
         pc = float(c.get("price_change", 0.0))
         vol = float(c.get("vol_ratio", 0.0))
         score = c.get("score", "-")
+        spread_src = "real" if spread_is_real else "est"
         return (
             f"exp={exp_bps:.1f}bps req={req_bps:.1f}bps cost={cost_bps:.1f}bps "
-            f"pc={pc:+.2f}% vol=x{vol:.1f} spread={spread:.2f}bps score={score}"
+            f"pc={pc:+.2f}% vol=x{vol:.1f} spread={spread:.2f}bps/{spread_src} score={score}"
         )
     except Exception as e:
         return f"cost_debug_error={e}"
