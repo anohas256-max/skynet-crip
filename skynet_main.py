@@ -517,6 +517,7 @@ async def update_pending_confirmations(pending_confirms, symbol, clean_symbol, p
             if (
                 getattr(cfg, "REJECT_OBSERVER_TRACK_CAN_OPEN", True)
                 and getattr(book["config"], "skip_track", False)
+                and eng.should_observe_reject_strategy(s_name)
                 and eng.should_observe_reject(pending["candidate"])
             ):
                 skip_tracker.open(
@@ -860,6 +861,7 @@ async def scan_futures():
                                 if (
                                     getattr(cfg, "REJECT_OBSERVER_TRACK_RULES_NOT_MET", True)
                                     and getattr(scfg, "skip_track", False)
+                                    and eng.should_observe_reject_strategy(s_name)
                                     and eng.should_observe_reject(candidate)
                                 ):
                                     r_reason = eng.reject_reason_for_strategy(scfg, candidate)

@@ -1064,3 +1064,21 @@ EXEC_EXPECTED_MOVE_MULTIPLIER_ESCAPE = 0.80
 # not into real.
 EXEC_COST_GATE_LOG_PREFIX = "COST_GATE"
 
+
+
+# ============================================================
+# REJECT OBSERVER V2 NO-SPAM
+# ============================================================
+# Do not create reject watches for every experimental strategy.
+# We only need representative lanes to measure what filters reject.
+REJECT_OBSERVER_STRATEGY_ALLOWLIST = (
+    "SMART_V2_STRICT_CLEAN_MO1,"
+    "SMART_V2_STRICT_OI_MO1,"
+    "META_V12_EXEC_SAFE_MO1,"
+    "MAIN_V92_TP08_EXEC_7,"
+    "YELLOW_SCORE3,"
+    "YELLOW_SCORE3_FAST"
+)
+
+REJECT_OBSERVER_COMPACT_REASONS = True
+

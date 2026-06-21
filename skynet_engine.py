@@ -580,6 +580,35 @@ def should_observe_reject(candidate: dict) -> bool:
     )
 
 
+
+def should_observe_reject_strategy(strategy_name: str) -> bool:
+    """
+    REJECT_OBSERVER_V2:
+    Avoid N duplicate virtual trades for the same candidate across dozens of
+    experimental strategies. We only observe representative lanes.
+    """
+    raw = str(getattr(cfg, "REJECT_OBSERVER_STRATEGY_ALLOWLIST", "") or "")
+    allowed = {x.strip() for x in raw.split(",") if x.strip()}
+    if not allowed:
+        return True
+    return str(strategy_name) in allowed
+
+
+def cost_gate_reason_tag(candidate: dict, lane: str = "normal", mode: str = "taker") -> str:
+    """
+    Compact reason tag. Full debug stays available in code, but logs should not
+    explode with huge repeated COST_GATE strings.
+    """
+    try:
+        exp_bps = expected_move_bps(candidate, lane=lane)
+        req_bps = required_move_bps(candidate, lane=lane, mode=mode)
+        cost_bps = execution_roundtrip_cost_bps(candidate, mode=mode)
+        return f"COST_FAIL_E{exp_bps:.0f}_R{req_bps:.0f}_C{cost_bps:.0f}"
+    except Exception:
+        return "COST_FAIL"
+
+
+
 def reject_reason_for_strategy(scfg, candidate: dict) -> str:
     """Compact reason label for a strategy that did not pass should_enter_strategy."""
     family = str(getattr(scfg, "family", "unknown"))
@@ -602,8 +631,11 @@ def reject_reason_for_strategy(scfg, candidate: dict) -> str:
     # Not exact per-family internals, but enough to price which gates are killing opportunities.
     lane = "fast" if family in ("yellow_score3", "yellow_score3_fast") else "normal"
     if not cost_gate_long(candidate, lane=lane, mode="taker"):
-        bits.append("COST_GATE_FAIL")
-        bits.append(cost_gate_debug(candidate, lane=lane, mode="taker").replace(" ", "_"))
+        if getattr(cfg, "REJECT_OBSERVER_COMPACT_REASONS", True):
+            bits.append(cost_gate_reason_tag(candidate, lane=lane, mode="taker"))
+        else:
+            bits.append("COST_GATE_FAIL")
+            bits.append(cost_gate_debug(candidate, lane=lane, mode="taker").replace(" ", "_"))
 
     if score < 3:
         bits.append("SCORE_LOW")
@@ -1605,7 +1637,8 @@ def cost_gate_debug(c: dict, lane: str = "normal", mode: str = "taker") -> str:
         exp_bps = expected_move_bps(c, lane=lane)
         req_bps = required_move_bps(c, lane=lane, mode=mode)
         cost_bps = execution_roundtrip_cost_bps(c, mode=mode)
-        spread = float(c.get("spread_bps", 999.0))
+        raw_spread = c.get("spread_bps", None)
+        spread = float(raw_spread) if raw_spread is not None else float(getattr(cfg, "SPREAD_BPS", 3.0))
         pc = float(c.get("price_change", 0.0))
         vol = float(c.get("vol_ratio", 0.0))
         score = c.get("score", "-")
@@ -2155,6 +2188,7 @@ async def process_selector_strategy(name, candidates, books, current_time, time_
             if (
                 getattr(cfg, "REJECT_OBSERVER_TRACK_CAN_OPEN", True)
                 and getattr(scfg, "skip_track", False)
+                and should_observe_reject_strategy(name)
                 and should_observe_reject(cand)
             ):
                 can_reason = ",".join(skip_reasons) if skip_reasons else "CAN_OPEN_FALSE"
