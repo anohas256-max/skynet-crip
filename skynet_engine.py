@@ -1700,13 +1700,67 @@ def is_depth_thin_escape_candidate(c: dict) -> bool:
 
 
 
+
+def is_cost_near_miss_fast(c: dict) -> bool:
+    """
+    Shadow-only lane:
+    global cost gate stays strict, but we separately test clean near-misses.
+    Example target: TNSR-like case that failed E39/R46 but then produced strong MFE.
+    """
+    if not getattr(cfg, "COST_NEAR_MISS_FAST_ENABLED", True):
+        return False
+
+    try:
+        score = float(c.get("score", -999))
+        vol = float(c.get("vol_ratio", 0.0))
+        pc = float(c.get("price_change", 0.0))
+        trend = float(c.get("trend_15m", 0.0))
+        btc = float(c.get("btc_5m_change", 0.0))
+        oi = float(c.get("oi_change", 0.0))
+        rank = float(c.get("current_turnover_rank", 999999))
+        struct = float(c.get("structure_risk", 999))
+        brisk = float(c.get("breakout_risk_score", 999))
+        fb = float(c.get("false_breakouts_15m", 999))
+    except Exception:
+        return False
+
+    # It must FAIL normal cost gate, otherwise it belongs to normal strategies.
+    if cost_gate_long(c, lane="normal", mode="taker"):
+        return False
+
+    exp_bps = expected_move_bps(c, lane="normal")
+    req_bps = required_move_bps(c, lane="normal", mode="taker")
+    if req_bps <= 0:
+        return False
+
+    near_ratio = exp_bps / req_bps
+
+    return (
+        near_ratio >= float(getattr(cfg, "COST_NEAR_MISS_MIN_EXPECTED_TO_REQUIRED", 0.80))
+        and score >= float(getattr(cfg, "COST_NEAR_MISS_MIN_SCORE", 4))
+        and vol >= float(getattr(cfg, "COST_NEAR_MISS_MIN_VOL", 8.0))
+        and float(getattr(cfg, "COST_NEAR_MISS_MIN_PC", 0.40)) <= pc <= float(getattr(cfg, "COST_NEAR_MISS_MAX_PC", 0.55))
+        and trend >= float(getattr(cfg, "COST_NEAR_MISS_MIN_TREND", 1.0))
+        and btc >= float(getattr(cfg, "COST_NEAR_MISS_MIN_BTC", -0.08))
+        and oi >= float(getattr(cfg, "COST_NEAR_MISS_MIN_OI", -2.0))
+        and rank <= float(getattr(cfg, "COST_NEAR_MISS_MAX_RANK", 50))
+        and struct <= float(getattr(cfg, "COST_NEAR_MISS_MAX_STRUCT", 2))
+        and brisk <= float(getattr(cfg, "COST_NEAR_MISS_MAX_BRISK", 2))
+        and fb <= float(getattr(cfg, "COST_NEAR_MISS_MAX_FB", 1))
+        and not c.get("absorption_risk_long")
+        and not c.get("high_effort_low_result")
+        and not c.get("weak_long_result")
+    )
+
+
+
 def should_enter_strategy(scfg: cfg.StrategyConfig, c: dict) -> bool:
     f = scfg.family
 
     # COST_AWARE_V1:
     # Do not spend taker-like costs on microscopic long moves.
     # Keep reject observer active separately; this gate only affects entries.
-    if f not in ("yellow_score2", "yellow_score2_tight"):
+    if f not in ("yellow_score2", "yellow_score2_tight", "cost_near_miss_fast"):
         lane = "fast" if f in ("yellow_score3", "yellow_score3_fast") else "normal"
         if not cost_gate_long(c, lane=lane, mode="taker"):
             return False
@@ -1925,6 +1979,9 @@ def should_enter_strategy(scfg: cfg.StrategyConfig, c: dict) -> bool:
 
     if f == "yellow_score3":
         return c["score"] == 3 and 0.25 <= c["price_change"] <= 0.45 and c["trend_15m"] > 0 and c["btc_5m_change"] > -0.10 and c["oi_change"] > -2.0
+
+    if f == "cost_near_miss_fast":
+        return is_cost_near_miss_fast(c)
 
     if f == "yellow_score3_fast":
         return (

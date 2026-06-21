@@ -1082,3 +1082,25 @@ REJECT_OBSERVER_STRATEGY_ALLOWLIST = (
 
 REJECT_OBSERVER_COMPACT_REASONS = True
 
+
+
+# ============================================================
+# COST NEAR MISS FAST SHADOW
+# ============================================================
+# Cost gate stays strict globally.
+# This lane studies cases that barely fail cost gate but have clean structure.
+# Shadow only. Real remains OFF.
+COST_NEAR_MISS_FAST_ENABLED = True
+COST_NEAR_MISS_MIN_EXPECTED_TO_REQUIRED = 0.80
+COST_NEAR_MISS_MIN_SCORE = 4
+COST_NEAR_MISS_MIN_VOL = 8.0
+COST_NEAR_MISS_MIN_PC = 0.40
+COST_NEAR_MISS_MAX_PC = 0.55
+COST_NEAR_MISS_MIN_TREND = 1.0
+COST_NEAR_MISS_MIN_BTC = -0.08
+COST_NEAR_MISS_MIN_OI = -2.0
+COST_NEAR_MISS_MAX_RANK = 50
+COST_NEAR_MISS_MAX_STRUCT = 2
+COST_NEAR_MISS_MAX_BRISK = 2
+COST_NEAR_MISS_MAX_FB = 1
+
