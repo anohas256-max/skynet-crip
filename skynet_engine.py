@@ -1590,11 +1590,66 @@ def execution_roundtrip_cost_bps(c: dict, mode: str = "taker") -> float:
     return fee_side * 2.0 + spread + slip_side * 2.0
 
 
+
+def expected_move_quality_factor(c: dict, lane: str = "normal") -> float:
+    """
+    Dynamic quality factor for expected capturable move.
+
+    We are not adding a hard filter here. We reduce expected move when the
+    signal is dirty. This directly addresses fee problem:
+    dirty signal must have a bigger raw impulse to survive costs.
+    """
+    if not getattr(cfg, "EXEC_RISK_ADJUSTED_EXPECTED_MOVE_ENABLED", True):
+        return 1.0
+
+    q = 1.0
+
+    try:
+        oi = float(c.get("oi_change", 0.0))
+        btc = float(c.get("btc_5m_change", 0.0))
+        brisk = float(c.get("breakout_risk_score", 0.0))
+        fb = float(c.get("false_breakouts_15m", 0.0))
+        struct = float(c.get("structure_risk", 0.0))
+    except Exception:
+        return 0.75
+
+    if oi < float(getattr(cfg, "EXEC_RISK_OI_NEG_LEVEL", 0.0)):
+        q *= float(getattr(cfg, "EXEC_RISK_PENALTY_OI_NEG", 0.78))
+
+    if btc < float(getattr(cfg, "EXEC_RISK_BTC_WEAK_LEVEL", -0.05)):
+        q *= float(getattr(cfg, "EXEC_RISK_PENALTY_BTC_WEAK", 0.85))
+
+    if brisk >= float(getattr(cfg, "EXEC_RISK_BRISK_HIGH_LEVEL", 4)):
+        q *= float(getattr(cfg, "EXEC_RISK_PENALTY_BRISK_HIGH", 0.78))
+
+    if fb >= float(getattr(cfg, "EXEC_RISK_FB_HIGH_LEVEL", 2)):
+        q *= float(getattr(cfg, "EXEC_RISK_PENALTY_FB_HIGH", 0.78))
+
+    if struct >= float(getattr(cfg, "EXEC_RISK_STRUCT_HIGH_LEVEL", 4)):
+        q *= float(getattr(cfg, "EXEC_RISK_PENALTY_STRUCT_HIGH", 0.85))
+
+    if not c.get("initiative_buying_proxy", False):
+        q *= float(getattr(cfg, "EXEC_RISK_PENALTY_NO_INITIATIVE", 0.82))
+
+    if c.get("high_effort_low_result", False):
+        q *= float(getattr(cfg, "EXEC_RISK_PENALTY_HIGH_EFFORT", 0.70))
+
+    if c.get("weak_long_result", False):
+        q *= float(getattr(cfg, "EXEC_RISK_PENALTY_WEAK_RESULT", 0.70))
+
+    floor = float(getattr(cfg, "EXEC_RISK_MIN_QUALITY_FACTOR", 0.35))
+    return max(floor, min(1.0, q))
+
+
+
 def expected_move_bps(c: dict, lane: str = "normal") -> float:
     """
-    Very conservative expected move proxy.
-    price_change is current impulse in percent.
-    We only assume part of it is capturable.
+    Conservative expected capturable move proxy.
+
+    Raw impulse alone is not enough. A dirty long signal with negative OI,
+    weak BTC, high breakout risk, false breakouts, no initiative, or weak body
+    should not be allowed to spend taker-like costs unless the raw move is much
+    stronger.
     """
     try:
         pc_bps = abs(float(c.get("price_change", 0.0))) * 100.0
@@ -1608,7 +1663,8 @@ def expected_move_bps(c: dict, lane: str = "normal") -> float:
     else:
         mult = float(getattr(cfg, "EXEC_EXPECTED_MOVE_MULTIPLIER_NORMAL", 0.85))
 
-    return pc_bps * mult
+    q = expected_move_quality_factor(c, lane=lane)
+    return pc_bps * mult * q
 
 
 def required_move_bps(c: dict, lane: str = "normal", mode: str = "taker") -> float:
@@ -1665,13 +1721,14 @@ def cost_gate_debug(c: dict, lane: str = "normal", mode: str = "taker") -> str:
         exp_bps = expected_move_bps(c, lane=lane)
         req_bps = required_move_bps(c, lane=lane, mode=mode)
         cost_bps = execution_roundtrip_cost_bps(c, mode=mode)
+        q = expected_move_quality_factor(c, lane=lane)
         spread, spread_is_real = normalized_spread_bps(c)
         pc = float(c.get("price_change", 0.0))
         vol = float(c.get("vol_ratio", 0.0))
         score = c.get("score", "-")
         spread_src = "real" if spread_is_real else "est"
         return (
-            f"exp={exp_bps:.1f}bps req={req_bps:.1f}bps cost={cost_bps:.1f}bps "
+            f"exp={exp_bps:.1f}bps req={req_bps:.1f}bps cost={cost_bps:.1f}bps q={q:.2f} "
             f"pc={pc:+.2f}% vol=x{vol:.1f} spread={spread:.2f}bps/{spread_src} score={score}"
         )
     except Exception as e:

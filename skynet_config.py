@@ -1105,3 +1105,31 @@ COST_NEAR_MISS_MAX_STRUCT = 2
 COST_NEAR_MISS_MAX_BRISK = 2
 COST_NEAR_MISS_MAX_FB = 1
 
+
+
+# ============================================================
+# RISK ADJUSTED COST GATE V1
+# ============================================================
+# Cost gate should not only ask "is price_change big enough?"
+# It must ask "is CLEAN expected move big enough after risks?"
+EXEC_RISK_ADJUSTED_EXPECTED_MOVE_ENABLED = True
+
+# Multipliers applied to expected move for long continuation.
+# Example: pc=0.66% can pass raw cost gate, but if OI is negative
+# and there is no initiative, expected capturable move should be reduced.
+EXEC_RISK_PENALTY_OI_NEG = 0.78
+EXEC_RISK_PENALTY_BTC_WEAK = 0.85
+EXEC_RISK_PENALTY_BRISK_HIGH = 0.78
+EXEC_RISK_PENALTY_FB_HIGH = 0.78
+EXEC_RISK_PENALTY_NO_INITIATIVE = 0.82
+EXEC_RISK_PENALTY_HIGH_EFFORT = 0.70
+EXEC_RISK_PENALTY_WEAK_RESULT = 0.70
+EXEC_RISK_PENALTY_STRUCT_HIGH = 0.85
+EXEC_RISK_MIN_QUALITY_FACTOR = 0.35
+
+EXEC_RISK_OI_NEG_LEVEL = 0.0
+EXEC_RISK_BTC_WEAK_LEVEL = -0.05
+EXEC_RISK_BRISK_HIGH_LEVEL = 4
+EXEC_RISK_FB_HIGH_LEVEL = 2
+EXEC_RISK_STRUCT_HIGH_LEVEL = 4
+
