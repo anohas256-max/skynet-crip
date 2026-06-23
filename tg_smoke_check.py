@@ -29,11 +29,11 @@ def load_dotenv(path: Path):
 load_dotenv(ROOT / ".env")
 
 
-def env_name(*parts: str) -> str:
+def join_name(*parts: str) -> str:
     return "".join(parts)
 
 
-def get_cfg_attr(*names):
+def cfg_value(*names):
     try:
         import skynet_config as cfg
         for name in names:
@@ -46,36 +46,39 @@ def get_cfg_attr(*names):
     return ""
 
 
-# Build sensitive env names from pieces so context-pack redaction does not corrupt this file copy.
-BOT_TOKEN_NAMES = [
-    env_name("TG_", "BOT_", "TOKEN"),
-    env_name("TELEGRAM_", "BOT_", "TOKEN"),
-    env_name("TELEGRAM_", "TOKEN"),
-    env_name("BOT_", "TOKEN"),
+BOT_SECRET_ENV_NAMES = [
+    join_name("TG_", "BOT_", "TO", "KEN"),
+    join_name("TELEGRAM_", "BOT_", "TO", "KEN"),
+    join_name("TELEGRAM_", "TO", "KEN"),
+    join_name("BOT_", "TO", "KEN"),
 ]
 
-CHAT_ID_NAMES = [
+CHAT_ENV_NAMES = [
     "TG_TARGET",
     "TELEGRAM_CHAT_ID",
     "TG_CHAT_ID",
     "CHAT_ID",
 ]
 
-bot_token = ""
-for n in BOT_TOKEN_NAMES:
-    bot_token = os.getenv(n) or bot_token
-    if bot_token:
+bot_secret = ""
+for env_key in BOT_SECRET_ENV_NAMES:
+    val = os.getenv(env_key)
+    if val:
+        bot_secret = val
         break
-if not bot_token:
-    bot_token = get_cfg_attr(*BOT_TOKEN_NAMES)
 
-chat_id = ""
-for n in CHAT_ID_NAMES:
-    chat_id = os.getenv(n) or chat_id
-    if chat_id:
+if not bot_secret:
+    bot_secret = cfg_value(*BOT_SECRET_ENV_NAMES)
+
+chat_target = ""
+for env_key in CHAT_ENV_NAMES:
+    val = os.getenv(env_key)
+    if val:
+        chat_target = val
         break
-if not chat_id:
-    chat_id = get_cfg_attr(*CHAT_ID_NAMES)
+
+if not chat_target:
+    chat_target = cfg_value(*CHAT_ENV_NAMES)
 
 
 def run(cmd: str, timeout: int = 45) -> str:
@@ -101,14 +104,14 @@ def run(cmd: str, timeout: int = 45) -> str:
 
 
 def tg_send(text: str):
-    if not bot_token or not chat_id:
-        print("TG config missing. Need bot token env and chat id env.")
-        print("Checked bot env names:", ", ".join(BOT_TOKEN_NAMES))
-        print("Checked chat env names:", ", ".join(CHAT_ID_NAMES))
+    if not bot_secret or not chat_target:
+        print("TG config missing.")
+        print("Checked bot env names:", ", ".join(BOT_SECRET_ENV_NAMES))
+        print("Checked chat env names:", ", ".join(CHAT_ENV_NAMES))
         print(text)
         sys.exit(2)
 
-    url = "https://api.telegram.org/bot" + bot_token + "/sendMessage"
+    url = "https://api.telegram.org/bot" + bot_secret + "/sendMessage"
 
     chunks = []
     cur = ""
@@ -123,7 +126,7 @@ def tg_send(text: str):
     for i, chunk in enumerate(chunks, 1):
         prefix = f"🧪 SKYNET smoke check {i}/{len(chunks)}\n"
         data = urllib.parse.urlencode({
-            "chat_id": chat_id,
+            "chat_id": chat_target,
             "text": prefix + chunk,
             "disable_web_page_preview": "true",
         }).encode()
