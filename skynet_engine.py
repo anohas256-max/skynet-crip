@@ -1860,6 +1860,44 @@ def is_cost_rescue_clean_impulse(c: dict) -> bool:
     )
 
 
+
+def is_depth_thin_escape_precheck(c: dict) -> bool:
+    """
+    Pre-depth selector gate for DEPTH_THIN_ESCAPE_SHADOW.
+    Depth fields are not available yet here. Real depth validation happens later
+    inside validate_depth_for_strategy after orderbook enrichment.
+    """
+    if not getattr(cfg, "DEPTH_THIN_ESCAPE_V2_ENABLED", True):
+        return False
+
+    try:
+        score = float(c.get("score", -999))
+        vol = float(c.get("vol_ratio", 0.0))
+        pc = float(c.get("price_change", 0.0))
+        trend = float(c.get("trend_15m", 0.0))
+        btc = float(c.get("btc_5m_change", 0.0))
+        oi = float(c.get("oi_change", 0.0))
+        rank = float(c.get("current_turnover_rank", 999999))
+        struct = float(c.get("structure_risk", 999))
+        brisk = float(c.get("breakout_risk_score", 999))
+        fb = float(c.get("false_breakouts_15m", 999))
+    except Exception:
+        return False
+
+    return (
+        score >= float(getattr(cfg, "DEPTH_THIN_ESCAPE_V2_MIN_SCORE", 5))
+        and vol >= float(getattr(cfg, "DEPTH_THIN_ESCAPE_V2_MIN_VOL", 12.0))
+        and pc >= float(getattr(cfg, "DEPTH_THIN_ESCAPE_V2_MIN_PC", 0.60))
+        and trend >= float(getattr(cfg, "DEPTH_THIN_ESCAPE_V2_MIN_TREND", 0.40))
+        and btc >= float(getattr(cfg, "DEPTH_THIN_ESCAPE_V2_MIN_BTC", -0.10))
+        and oi >= float(getattr(cfg, "DEPTH_THIN_ESCAPE_V2_MIN_OI", 0.0))
+        and rank <= float(getattr(cfg, "DEPTH_THIN_ESCAPE_V2_MAX_RANK", 50))
+        and struct <= float(getattr(cfg, "DEPTH_THIN_ESCAPE_V2_MAX_STRUCT", 2))
+        and brisk <= float(getattr(cfg, "DEPTH_THIN_ESCAPE_V2_MAX_BRISK", 3))
+        and fb <= float(getattr(cfg, "DEPTH_THIN_ESCAPE_V2_MAX_FB", 1))
+    )
+
+
 def is_depth_thin_escape_shadow(c: dict) -> bool:
     """
     Shadow-only lane for BLESS/SYN-like depth-thin escapes.
@@ -1880,8 +1918,8 @@ def is_depth_thin_escape_shadow(c: dict) -> bool:
         brisk = float(c.get("breakout_risk_score", 999))
         fb = float(c.get("false_breakouts_15m", 999))
         spread = float(c.get("spread_bps", 999))
-        bid5 = float(c.get("bid5_usd", c.get("bid5", 0.0)) or 0.0)
-        ask5 = float(c.get("ask5_usd", c.get("ask5", 0.0)) or 0.0)
+        bid5 = float(c.get("top5_bid_usdt", c.get("bid5_usd", c.get("bid5", 0.0))) or 0.0)
+        ask5 = float(c.get("top5_ask_usdt", c.get("ask5_usd", c.get("ask5", 0.0))) or 0.0)
     except Exception:
         return False
 
@@ -2136,7 +2174,7 @@ def should_enter_strategy(scfg: cfg.StrategyConfig, c: dict) -> bool:
         return is_cost_rescue_clean_impulse(c)
 
     if f == "depth_thin_escape_shadow":
-        return is_depth_thin_escape_shadow(c)
+        return is_depth_thin_escape_precheck(c)
 
     if f == "yellow_score3_fast":
         return (
@@ -2378,6 +2416,10 @@ def validate_depth_for_strategy(scfg: cfg.StrategyConfig, cand: dict) -> Tuple[b
     if not cand.get("depth_available", False):
         return False, cand.get("depth_reason", "DEPTH_FAIL")
     if cand.get("depth_thin", False):
+        if getattr(scfg, "family", "") == "depth_thin_escape_shadow":
+            if is_depth_thin_escape_shadow(cand):
+                return True, "DEPTH_THIN_ESCAPE_OK"
+            return False, "DEPTH_THIN_ESCAPE_FAIL"
         return False, "DEPTH_THIN"
     spread_bps = safe_float(cand.get("spread_bps"), 999.0)
     if spread_bps > scfg.spread_limit_bps:

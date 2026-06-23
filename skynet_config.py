@@ -933,9 +933,24 @@ def build_strategy_configs():
         StrategyConfig("FOMO_TEST", "fomo_test", 3.0, 0.8, silent=True),
         StrategyConfig("YELLOW_SCORE3", "yellow_score3", 3.0, 0.8, silent=True),
         StrategyConfig("YELLOW_SCORE3_FAST", "yellow_score3_fast", 3.0, 0.8, silent=True),
-        StrategyConfig("COST_NEAR_MISS_FAST", "cost_near_miss_fast", 3.0, 0.8, silent=True),
-        StrategyConfig("COST_RESCUE_CLEAN_IMPULSE", "cost_rescue_clean_impulse", 3.0, 0.8, silent=True),
-        StrategyConfig("DEPTH_THIN_ESCAPE_SHADOW", "depth_thin_escape_shadow", 3.0, 0.8, silent=True),
+        StrategyConfig(
+            "COST_NEAR_MISS_FAST", "cost_near_miss_fast",
+            margin=3.0, tp=0.8, leverage=4, max_open=1,
+            silent=True, selector=True, require_depth=True,
+            spread_limit_bps=5.0, skip_track=True,
+        ),
+        StrategyConfig(
+            "COST_RESCUE_CLEAN_IMPULSE", "cost_rescue_clean_impulse",
+            margin=3.0, tp=0.8, leverage=4, max_open=1,
+            silent=True, selector=True, require_depth=True,
+            spread_limit_bps=5.0, skip_track=True,
+        ),
+        StrategyConfig(
+            "DEPTH_THIN_ESCAPE_SHADOW", "depth_thin_escape_shadow",
+            margin=3.0, tp=0.8, leverage=4, max_open=1,
+            silent=True, selector=True, require_depth=True,
+            spread_limit_bps=5.0, skip_track=True,
+        ),
         StrategyConfig("YELLOW_SCORE2", "yellow_score2", 3.0, 0.8, silent=True),
         StrategyConfig("YELLOW_SCORE2_TIGHT", "yellow_score2_tight", 3.0, 0.8, silent=True),
     ]
