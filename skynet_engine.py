@@ -1811,13 +1811,105 @@ def is_cost_near_miss_fast(c: dict) -> bool:
 
 
 
+
+def is_cost_rescue_clean_impulse(c: dict) -> bool:
+    """
+    Shadow-only rescue for rare false negatives like RE:
+    risk-adjusted expected move fails, but raw impulse/trend/flow are clean enough
+    to study separately.
+    """
+    if not getattr(cfg, "COST_RESCUE_CLEAN_IMPULSE_ENABLED", True):
+        return False
+
+    try:
+        score = float(c.get("score", -999))
+        vol = float(c.get("vol_ratio", 0.0))
+        pc = float(c.get("price_change", 0.0))
+        trend = float(c.get("trend_15m", 0.0))
+        btc = float(c.get("btc_5m_change", 0.0))
+        oi = float(c.get("oi_change", 0.0))
+        rank = float(c.get("current_turnover_rank", 999999))
+        struct = float(c.get("structure_risk", 999))
+        brisk = float(c.get("breakout_risk_score", 999))
+        fb = float(c.get("false_breakouts_15m", 999))
+    except Exception:
+        return False
+
+    # It must fail normal cost gate, otherwise normal lanes own it.
+    if cost_gate_long(c, lane="normal", mode="taker"):
+        return False
+
+    exp_bps = expected_move_bps(c, lane="normal")
+    req_bps = required_move_bps(c, lane="normal", mode="taker")
+    if req_bps <= 0:
+        return False
+
+    return (
+        (exp_bps / req_bps) >= float(getattr(cfg, "COST_RESCUE_MIN_EXPECTED_TO_REQUIRED", 0.75))
+        and score >= float(getattr(cfg, "COST_RESCUE_MIN_SCORE", 3))
+        and vol >= float(getattr(cfg, "COST_RESCUE_MIN_VOL", 8.0))
+        and float(getattr(cfg, "COST_RESCUE_MIN_PC", 0.70)) <= pc <= float(getattr(cfg, "COST_RESCUE_MAX_PC", 1.05))
+        and trend >= float(getattr(cfg, "COST_RESCUE_MIN_TREND", 2.0))
+        and btc >= float(getattr(cfg, "COST_RESCUE_MIN_BTC", 0.0))
+        and oi >= float(getattr(cfg, "COST_RESCUE_MIN_OI", 0.5))
+        and rank <= float(getattr(cfg, "COST_RESCUE_MAX_RANK", 35))
+        and struct <= float(getattr(cfg, "COST_RESCUE_MAX_STRUCT", 2))
+        and brisk <= float(getattr(cfg, "COST_RESCUE_MAX_BRISK", 2))
+        and fb <= float(getattr(cfg, "COST_RESCUE_MAX_FB", 1))
+        and not c.get("absorption_risk_long")
+    )
+
+
+def is_depth_thin_escape_shadow(c: dict) -> bool:
+    """
+    Shadow-only lane for BLESS/SYN-like depth-thin escapes.
+    This does NOT disable depth guard globally.
+    """
+    if not getattr(cfg, "DEPTH_THIN_ESCAPE_V2_ENABLED", True):
+        return False
+
+    try:
+        score = float(c.get("score", -999))
+        vol = float(c.get("vol_ratio", 0.0))
+        pc = float(c.get("price_change", 0.0))
+        trend = float(c.get("trend_15m", 0.0))
+        btc = float(c.get("btc_5m_change", 0.0))
+        oi = float(c.get("oi_change", 0.0))
+        rank = float(c.get("current_turnover_rank", 999999))
+        struct = float(c.get("structure_risk", 999))
+        brisk = float(c.get("breakout_risk_score", 999))
+        fb = float(c.get("false_breakouts_15m", 999))
+        spread = float(c.get("spread_bps", 999))
+        bid5 = float(c.get("bid5_usd", c.get("bid5", 0.0)) or 0.0)
+        ask5 = float(c.get("ask5_usd", c.get("ask5", 0.0)) or 0.0)
+    except Exception:
+        return False
+
+    return (
+        score >= float(getattr(cfg, "DEPTH_THIN_ESCAPE_V2_MIN_SCORE", 5))
+        and vol >= float(getattr(cfg, "DEPTH_THIN_ESCAPE_V2_MIN_VOL", 12.0))
+        and pc >= float(getattr(cfg, "DEPTH_THIN_ESCAPE_V2_MIN_PC", 0.60))
+        and trend >= float(getattr(cfg, "DEPTH_THIN_ESCAPE_V2_MIN_TREND", 0.40))
+        and btc >= float(getattr(cfg, "DEPTH_THIN_ESCAPE_V2_MIN_BTC", -0.10))
+        and oi >= float(getattr(cfg, "DEPTH_THIN_ESCAPE_V2_MIN_OI", 0.0))
+        and spread <= float(getattr(cfg, "DEPTH_THIN_ESCAPE_V2_MAX_SPREAD_BPS", 5.0))
+        and bid5 >= float(getattr(cfg, "DEPTH_THIN_ESCAPE_V2_MIN_BID5_USD", 300.0))
+        and ask5 >= float(getattr(cfg, "DEPTH_THIN_ESCAPE_V2_MIN_ASK5_USD", 150.0))
+        and rank <= float(getattr(cfg, "DEPTH_THIN_ESCAPE_V2_MAX_RANK", 50))
+        and struct <= float(getattr(cfg, "DEPTH_THIN_ESCAPE_V2_MAX_STRUCT", 2))
+        and brisk <= float(getattr(cfg, "DEPTH_THIN_ESCAPE_V2_MAX_BRISK", 3))
+        and fb <= float(getattr(cfg, "DEPTH_THIN_ESCAPE_V2_MAX_FB", 1))
+    )
+
+
+
 def should_enter_strategy(scfg: cfg.StrategyConfig, c: dict) -> bool:
     f = scfg.family
 
     # COST_AWARE_V1:
     # Do not spend taker-like costs on microscopic long moves.
     # Keep reject observer active separately; this gate only affects entries.
-    if f not in ("yellow_score2", "yellow_score2_tight", "cost_near_miss_fast"):
+    if f not in ("yellow_score2", "yellow_score2_tight", "cost_near_miss_fast", "cost_rescue_clean_impulse", "depth_thin_escape_shadow"):
         lane = "fast" if f in ("yellow_score3", "yellow_score3_fast") else "normal"
         if not cost_gate_long(c, lane=lane, mode="taker"):
             return False
@@ -2039,6 +2131,12 @@ def should_enter_strategy(scfg: cfg.StrategyConfig, c: dict) -> bool:
 
     if f == "cost_near_miss_fast":
         return is_cost_near_miss_fast(c)
+
+    if f == "cost_rescue_clean_impulse":
+        return is_cost_rescue_clean_impulse(c)
+
+    if f == "depth_thin_escape_shadow":
+        return is_depth_thin_escape_shadow(c)
 
     if f == "yellow_score3_fast":
         return (
