@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import os
 import sys
-import json
 import time
 import shlex
 import subprocess
@@ -30,6 +29,10 @@ def load_dotenv(path: Path):
 load_dotenv(ROOT / ".env")
 
 
+def env_name(*parts: str) -> str:
+    return "".join(parts)
+
+
 def get_cfg_attr(*names):
     try:
         import skynet_config as cfg
@@ -43,21 +46,36 @@ def get_cfg_attr(*names):
     return ""
 
 
-TG_TOKEN = (
-    os.getenv("TG_BOT_TOKEN")
-    or os.getenv("TELEGRAM_BOT_TOKEN")
-    or os.getenv("TELEGRAM_TOKEN")
-    or os.getenv("BOT_TOKEN")
-    or get_cfg_attr("TG_BOT_TOKEN", "TELEGRAM_BOT_TOKEN", "TELEGRAM_TOKEN", "BOT_TOKEN")
-)
+# Build sensitive env names from pieces so context-pack redaction does not corrupt this file copy.
+BOT_TOKEN_NAMES = [
+    env_name("TG_", "BOT_", "TOKEN"),
+    env_name("TELEGRAM_", "BOT_", "TOKEN"),
+    env_name("TELEGRAM_", "TOKEN"),
+    env_name("BOT_", "TOKEN"),
+]
 
-TG_TARGET = (
-    os.getenv("TG_TARGET")
-    or os.getenv("TELEGRAM_CHAT_ID")
-    or os.getenv("TG_CHAT_ID")
-    or os.getenv("CHAT_ID")
-    or get_cfg_attr("TG_TARGET", "TELEGRAM_CHAT_ID", "TG_CHAT_ID", "CHAT_ID")
-)
+CHAT_ID_NAMES = [
+    "TG_TARGET",
+    "TELEGRAM_CHAT_ID",
+    "TG_CHAT_ID",
+    "CHAT_ID",
+]
+
+bot_token = ""
+for n in BOT_TOKEN_NAMES:
+    bot_token = os.getenv(n) or bot_token
+    if bot_token:
+        break
+if not bot_token:
+    bot_token = get_cfg_attr(*BOT_TOKEN_NAMES)
+
+chat_id = ""
+for n in CHAT_ID_NAMES:
+    chat_id = os.getenv(n) or chat_id
+    if chat_id:
+        break
+if not chat_id:
+    chat_id = get_cfg_attr(*CHAT_ID_NAMES)
 
 
 def run(cmd: str, timeout: int = 45) -> str:
@@ -83,14 +101,15 @@ def run(cmd: str, timeout: int = 45) -> str:
 
 
 def tg_send(text: str):
-    if not TG_TOKEN or not TG_TARGET:
-        print("TG config missing. Need TG_BOT_TOKEN/TELEGRAM_BOT_TOKEN and TG_TARGET/TELEGRAM_CHAT_ID.")
+    if not bot_token or not chat_id:
+        print("TG config missing. Need bot token env and chat id env.")
+        print("Checked bot env names:", ", ".join(BOT_TOKEN_NAMES))
+        print("Checked chat env names:", ", ".join(CHAT_ID_NAMES))
         print(text)
         sys.exit(2)
 
-    url = f"https://api.telegram.org/bot{TG_TOKEN}/sendMessage"
+    url = "https://api.telegram.org/bot" + bot_token + "/sendMessage"
 
-    # Telegram limit is 4096 chars. Keep margin.
     chunks = []
     cur = ""
     for line in text.splitlines():
@@ -104,7 +123,7 @@ def tg_send(text: str):
     for i, chunk in enumerate(chunks, 1):
         prefix = f"🧪 SKYNET smoke check {i}/{len(chunks)}\n"
         data = urllib.parse.urlencode({
-            "chat_id": TG_TARGET,
+            "chat_id": chat_id,
             "text": prefix + chunk,
             "disable_web_page_preview": "true",
         }).encode()
@@ -128,7 +147,7 @@ report.append(run("date -u"))
 report.append(run("git status --short && git log --oneline -5", timeout=30))
 
 report.append("\n=== 1. CODE COMPILE ===")
-report.append(run("/root/skynet/.venv/bin/python -m py_compile skynet_config.py skynet_engine.py skynet_main.py skynet_context_pack.py", timeout=60))
+report.append(run("/root/skynet/.venv/bin/python -m py_compile skynet_config.py skynet_engine.py skynet_main.py skynet_context_pack.py tg_smoke_check.py", timeout=60))
 
 report.append("\n=== 2. STRATEGY REGISTRATION ===")
 report.append(py_block(r'''
