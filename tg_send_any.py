@@ -1,21 +1,16 @@
 #!/usr/bin/env python3
 import os
 import sys
-import json
-import time
-import urllib.parse
-import urllib.request
 from pathlib import Path
 
 ROOT = Path("/root/skynet")
 os.chdir(ROOT)
 
 
-def load_dotenv():
-    p = ROOT / ".env"
-    if not p.exists():
+def load_dotenv(path: Path):
+    if not path.exists():
         return
-    for raw in p.read_text(errors="ignore").splitlines():
+    for raw in path.read_text(errors="ignore").splitlines():
         line = raw.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue
@@ -23,140 +18,63 @@ def load_dotenv():
         os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
 
 
-load_dotenv()
+load_dotenv(ROOT / ".env")
+
+sys.path.insert(0, str(ROOT))
+
+import skynet_config as cfg
+from telethon.sync import TelegramClient
 
 
-def cfg_get(names):
-    try:
-        import skynet_config as cfg
-    except Exception:
-        return ""
-
-    for name in names:
-        if hasattr(cfg, name):
-            val = getattr(cfg, name)
-            if val not in (None, "", False):
-                return str(val)
-    return ""
-
-
-def env_get(names):
+def get_value(*names, default=None):
     for name in names:
         val = os.getenv(name)
         if val not in (None, ""):
-            return str(val)
-    return ""
+            return val
+    for name in names:
+        if hasattr(cfg, name):
+            val = getattr(cfg, name)
+            if val not in (None, ""):
+                return val
+    return default
 
 
-TOKEN_NAMES = [
-    "TG_BOT_TOKEN",
-    "TELEGRAM_BOT_TOKEN",
-    "TELEGRAM_TOKEN",
-    "TG_TOKEN",
-    "BOT_TOKEN",
-    "TELEGRAM_API_TOKEN",
-    "TG_API_TOKEN",
-]
+def main():
+    if len(sys.argv) < 2:
+        print("usage: tg_send_any.py /path/to/file [caption] [target]")
+        raise SystemExit(2)
 
-CHAT_NAMES = [
-    "TG_TARGET",
-    "TG_CHAT_ID",
-    "TELEGRAM_CHAT_ID",
-    "TELEGRAM_TARGET",
-    "CHAT_ID",
-    "TELEGRAM_CHANNEL_ID",
-    "TG_CHANNEL_ID",
-]
+    path = Path(sys.argv[1])
+    caption = sys.argv[2] if len(sys.argv) >= 3 else f"SKYNET file {path.name}"
+    target = sys.argv[3] if len(sys.argv) >= 4 else None
 
-token = env_get(TOKEN_NAMES) or cfg_get(TOKEN_NAMES)
-chat_id = env_get(CHAT_NAMES) or cfg_get(CHAT_NAMES)
+    api_id = int(get_value("API_ID", default=0) or 0)
+    api_hash = str(get_value("API_HASH", default="") or "")
+    target = target or get_value("TG_TARGET", default=None) or "me"
 
-# Fallback: some configs store names with lowercase or mixed names.
-if not token or not chat_id:
-    try:
-        import skynet_config as cfg
-        for k in dir(cfg):
-            ku = k.upper()
-            val = getattr(cfg, k, None)
-            if not isinstance(val, (str, int)):
-                continue
-            sval = str(val)
-            if not token and ("TOKEN" in ku) and ("TG" in ku or "TELEGRAM" in ku or "BOT" in ku):
-                token = sval
-            if not chat_id and ("CHAT" in ku or "TARGET" in ku or "CHANNEL" in ku) and ("TG" in ku or "TELEGRAM" in ku):
-                chat_id = sval
-    except Exception:
-        pass
+    print("api_id_found:", bool(api_id))
+    print("api_hash_found:", bool(api_hash))
+    print("target:", target)
+    print("file:", path)
+    print("exists:", path.exists())
+    print("size:", path.stat().st_size if path.exists() else None)
 
-if len(sys.argv) < 2:
-    print("usage: tg_send_any.py /path/to/file [caption]")
-    sys.exit(2)
+    if not api_id or not api_hash:
+        print("ERROR: API_ID/API_HASH missing")
+        raise SystemExit(3)
 
-path = Path(sys.argv[1])
-caption = sys.argv[2] if len(sys.argv) >= 3 else path.name
+    if not path.exists():
+        print("ERROR: file not found")
+        raise SystemExit(4)
 
-print("token_found:", bool(token))
-print("chat_found:", bool(chat_id))
-print("file:", path)
-print("exists:", path.exists())
-print("size:", path.stat().st_size if path.exists() else None)
+    # отдельная session, как в context_pack, чтобы не конфликтовать с ботом
+    session = str(ROOT / "context_pack_session")
 
-if not token or not chat_id:
-    print("ERROR: Telegram config not found by universal sender.")
-    print("Checked token names:", ", ".join(TOKEN_NAMES))
-    print("Checked chat names:", ", ".join(CHAT_NAMES))
-    sys.exit(3)
+    with TelegramClient(session, api_id, api_hash) as client:
+        client.send_file(target, str(path), caption=caption)
 
-if not path.exists():
-    print("ERROR: file not found")
-    sys.exit(4)
+    print("TELETHON_SEND=OK")
 
 
-def send_message(text: str):
-    url = "https://api.telegram.org/bot" + token + "/sendMessage"
-    data = urllib.parse.urlencode({
-        "chat_id": chat_id,
-        "text": text,
-        "disable_web_page_preview": "true",
-    }).encode()
-    req = urllib.request.Request(url, data=data, method="POST")
-    with urllib.request.urlopen(req, timeout=30) as r:
-        print("sendMessage:", r.read().decode(errors="ignore"))
-
-
-def send_document(file_path: Path, caption: str):
-    boundary = "----SKYNETBOUNDARYTGFILE"
-    url = "https://api.telegram.org/bot" + token + "/sendDocument"
-
-    body = bytearray()
-
-    def add(s: str):
-        body.extend(s.encode())
-
-    add(f"--{boundary}\r\n")
-    add('Content-Disposition: form-data; name="chat_id"\r\n\r\n')
-    add(str(chat_id) + "\r\n")
-
-    add(f"--{boundary}\r\n")
-    add('Content-Disposition: form-data; name="caption"\r\n\r\n')
-    add(caption + "\r\n")
-
-    add(f"--{boundary}\r\n")
-    add(f'Content-Disposition: form-data; name="document"; filename="{file_path.name}"\r\n')
-    add("Content-Type: application/octet-stream\r\n\r\n")
-    body.extend(file_path.read_bytes())
-    add(f"\r\n--{boundary}--\r\n")
-
-    req = urllib.request.Request(
-        url,
-        data=bytes(body),
-        headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
-        method="POST",
-    )
-    with urllib.request.urlopen(req, timeout=180) as r:
-        print("sendDocument:", r.read().decode(errors="ignore"))
-
-
-send_message("📎 SKYNET file sender test: sending " + path.name)
-time.sleep(0.5)
-send_document(path, caption)
+if __name__ == "__main__":
+    main()
