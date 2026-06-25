@@ -57,31 +57,57 @@ def eval_side(rows, side, pred):
     if not sub:
         return None
 
-    if side == "LONG":
-        tp = [r for r in sub if q(r["max_up"]) >= 0.80]
-        sl = [r for r in sub if q(r["max_down"]) <= -0.50]
-        # примерная net-модель: TP +0.8%, SL -0.5%, TIME close_pct, комиссия/проскальз ~0.29%
-        nets = []
-        for r in sub:
-            if q(r["max_up"]) >= 0.80:
-                gross = 0.80
-            elif q(r["max_down"]) <= -0.50:
+    # Conservative order model:
+    # If both TP and SL are touched inside the recorded path, count it as SL.
+    # This prevents optimistic fake edge when max_up/max_down do not contain event order.
+    tp_count = 0
+    sl_count = 0
+    both_count = 0
+    time_count = 0
+    nets = []
+
+    for r in sub:
+        max_up = q(r["max_up"])
+        max_down = q(r["max_down"])
+        close_pct = q(r["close_pct"])
+
+        if side == "LONG":
+            hit_tp = max_up >= 0.80
+            hit_sl = max_down <= -0.50
+
+            if hit_tp and hit_sl:
+                both_count += 1
+                sl_count += 1
                 gross = -0.50
-            else:
-                gross = q(r["close_pct"])
-            nets.append(gross - 0.29)
-    else:
-        tp = [r for r in sub if q(r["max_down"]) <= -0.80]
-        sl = [r for r in sub if q(r["max_up"]) >= 0.50]
-        nets = []
-        for r in sub:
-            if q(r["max_down"]) <= -0.80:
-                gross = 0.80
-            elif q(r["max_up"]) >= 0.50:
+            elif hit_sl:
+                sl_count += 1
                 gross = -0.50
+            elif hit_tp:
+                tp_count += 1
+                gross = 0.80
             else:
-                gross = -q(r["close_pct"])
-            nets.append(gross - 0.29)
+                time_count += 1
+                gross = close_pct
+
+        else:
+            hit_tp = max_down <= -0.80
+            hit_sl = max_up >= 0.50
+
+            if hit_tp and hit_sl:
+                both_count += 1
+                sl_count += 1
+                gross = -0.50
+            elif hit_sl:
+                sl_count += 1
+                gross = -0.50
+            elif hit_tp:
+                tp_count += 1
+                gross = 0.80
+            else:
+                time_count += 1
+                gross = -close_pct
+
+        nets.append(gross - 0.29)
 
     wins = [x for x in nets if x > 0]
     losses = [x for x in nets if x <= 0]
@@ -89,14 +115,15 @@ def eval_side(rows, side, pred):
 
     return {
         "n": len(sub),
-        "tp": len(tp),
-        "sl": len(sl),
-        "time": len(sub) - len(tp) - len(sl),
+        "tp": tp_count,
+        "sl": sl_count,
+        "both": both_count,
+        "time": time_count,
         "sum": sum(nets),
         "avg": sum(nets) / len(nets),
         "pf": pf,
-        "tp_rate": len(tp) / len(sub),
-        "sl_rate": len(sl) / len(sub),
+        "tp_rate": tp_count / len(sub),
+        "sl_rate": sl_count / len(sub),
         "avg_max_up": statistics.mean([q(r["max_up"]) for r in sub]),
         "avg_max_down": statistics.mean([q(r["max_down"]) for r in sub]),
     }
@@ -106,7 +133,7 @@ def fmt_res(r):
     if not r:
         return "None"
     return (
-        f"n={r['n']} tp={r['tp']} sl={r['sl']} time={r['time']} "
+        f"n={r['n']} tp={r['tp']} sl={r['sl']} both={r.get('both', 0)} time={r['time']} "
         f"sum={r['sum']:+.2f}% avg={r['avg']:+.3f}% pf={r['pf']:.2f} "
         f"tp%={r['tp_rate']*100:.1f} sl%={r['sl_rate']*100:.1f} "
         f"avg_up={r['avg_max_up']:+.3f}% avg_down={r['avg_max_down']:+.3f}%"
