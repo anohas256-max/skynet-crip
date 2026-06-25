@@ -10,6 +10,7 @@ from telethon import TelegramClient
 import skynet_config as cfg
 import skynet_engine as eng
 import research_fade_shadow
+import maker_short_shadow
 
 
 client = TelegramClient("volume_session", cfg.API_ID, cfg.API_HASH)
@@ -78,7 +79,7 @@ def write_v12_event(candidate: dict, stage: str, note: str = ""):
 
 
 
-async def dump_log_always(log_interval, date_postfix, books, dry_live, skip_tracker, fade_shadow=None):
+async def dump_log_always(log_interval, date_postfix, books, dry_live, skip_tracker, fade_shadow=None, maker_shadow=None):
     filename = f"skynet_{log_interval}.log"
 
     if not os.path.exists(filename) or os.path.getsize(filename) == 0:
@@ -97,6 +98,9 @@ async def dump_log_always(log_interval, date_postfix, books, dry_live, skip_trac
         f.write("\n")
         if fade_shadow is not None:
             f.write(fade_shadow.format_report())
+            f.write("\n")
+        if maker_shadow is not None:
+            f.write(maker_shadow.format_report())
             f.write("\n")
         if hasattr(eng, "format_smart_v2_report"):
             f.write(eng.format_smart_v2_report())
@@ -642,6 +646,7 @@ async def scan_futures():
     dry_live = eng.DryLiveManager(cfg.LIVE_DRY_TRACKS)
     skip_tracker = eng.SkipTracker()
     fade_shadow = research_fade_shadow.ResearchFadeV1Shadow(write_to_logs)
+    maker_shadow = maker_short_shadow.MakerShortTp3Sl03Shadow(write_to_logs)
 
     history = {}
     last_alert_time = {}
@@ -763,6 +768,7 @@ async def scan_futures():
                         # Research-only SHORT fade shadow tracker.
                         # Important: update on every ticker price tick, otherwise OPEN trades never close by TTL.
                         fade_shadow.update_price(symbol, clean_symbol, price, current_time, time_str)
+                        maker_shadow.update_price(symbol, clean_symbol, price, current_time, time_str)
 
                         # Manage V11.3 pending confirmation entries.
                         await update_pending_confirmations(
@@ -959,10 +965,12 @@ async def scan_futures():
                             fade_unique[_cand["symbol"]] = _cand
                     for _cand in fade_unique.values():
                         fade_shadow.maybe_open(_cand, current_time, snapshot_time_str)
+                        maker_shadow.maybe_open(_cand, current_time, snapshot_time_str)
 
-                    # Direct close polling for active fade positions.
+                    # Direct close polling for active fade/maker positions.
                     # This is independent from candidate/ticker recurrence.
                     await fade_shadow.poll_active_prices(session, current_time, snapshot_time_str)
+                    await maker_shadow.poll_active_prices(session, current_time, snapshot_time_str)
 
                     for s_name in selector_names:
                         scfg = strategy_configs[s_name]
@@ -1048,13 +1056,13 @@ async def scan_futures():
                     # --- FILE DUMPS ---
                     date_postfix = time.strftime("%Y-%m-%d_%H-%M")
                     if current_time - last_dump_3h >= 10800:
-                        await dump_log_always("3h", date_postfix, books, dry_live, skip_tracker, fade_shadow)
+                        await dump_log_always("3h", date_postfix, books, dry_live, skip_tracker, fade_shadow, maker_shadow)
                         last_dump_3h = current_time
                     if current_time - last_dump_12h >= 43200:
-                        await dump_log_always("12h", date_postfix, books, dry_live, skip_tracker, fade_shadow)
+                        await dump_log_always("12h", date_postfix, books, dry_live, skip_tracker, fade_shadow, maker_shadow)
                         last_dump_12h = current_time
                     if current_time - last_dump_48h >= 172800:
-                        await dump_log_always("48h", date_postfix, books, dry_live, skip_tracker, fade_shadow)
+                        await dump_log_always("48h", date_postfix, books, dry_live, skip_tracker, fade_shadow, maker_shadow)
                         last_dump_48h = current_time
 
                     await asyncio.sleep(5)
