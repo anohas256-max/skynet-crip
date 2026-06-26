@@ -721,6 +721,7 @@ async def scan_futures():
                                 btc_15m_volatility = ((hi - lo) / lo) * 100.0
 
                     selector_candidates = {name: [] for name in selector_names}
+                    maker_scan_candidates = []  # independent high-PC stream for maker-short shadow
 
                     # Current rolling-24h turnover universe rank from MEXC ticker amount24.
                     # This is live-compatible and approximates ROLL24_TURNOVER_TOP_N.
@@ -811,7 +812,17 @@ async def scan_futures():
                         if not (vol_ratio > cfg.VOL_MULTIPLIER and vol_1m > cfg.MIN_VOL_1M and avg_1m_vol > cfg.MIN_AVG_1M_VOL):
                             continue
 
-                        if not (cfg.PRICE_CHANGE_MIN <= price_change <= cfg.PRICE_CHANGE_MAX):
+                        normal_pc_ok = cfg.PRICE_CHANGE_MIN <= price_change <= cfg.PRICE_CHANGE_MAX
+
+                        maker_scan_ok = (
+                            getattr(cfg, "MAKER_SHORT_V1_ENABLED", False)
+                            and price_change >= getattr(cfg, "MAKER_SHORT_V1_MIN_PC", 1.0)
+                            and price_change <= getattr(cfg, "MAKER_SHORT_V1_SCAN_MAX_PC", 3.0)
+                            and vol_ratio >= getattr(cfg, "MAKER_SHORT_V1_MIN_VOL", 8.0)
+                            and current_turnover_rank.get(symbol, 999999) <= getattr(cfg, "MAKER_SHORT_V1_MAX_RANK", 80)
+                        )
+
+                        if not (normal_pc_ok or maker_scan_ok):
                             continue
 
                         if vol_ratio > 100 or abs(oi_change) > 20:
@@ -850,6 +861,9 @@ async def scan_futures():
                         }
 
                         candidate = build_score_and_analysis(candidate, btc_15m_volatility)
+
+                        if maker_scan_ok:
+                            maker_scan_candidates.append(candidate)
 
                         all_entered = []
                         visible_entered = []
@@ -956,6 +970,12 @@ async def scan_futures():
 
                     # --- PROCESS SELECTOR STRATEGIES AFTER FULL SNAPSHOT ---
                     await eng.enrich_selector_candidates_with_depth(session, selector_candidates, snapshot_time_str)
+
+                    if maker_scan_candidates:
+                        maker_pack = {"MAKER_SHORT_TP3_SL03_SHADOW": maker_scan_candidates}
+                        await eng.enrich_selector_candidates_with_depth(session, maker_pack, snapshot_time_str)
+                        for _cand in maker_pack["MAKER_SHORT_TP3_SL03_SHADOW"]:
+                            maker_shadow.maybe_open(_cand, current_time, snapshot_time_str)
 
                     # Research-only fade shadow opens after depth enrichment.
                     # It observes the same live candidate stream but never affects selector/dry/real.

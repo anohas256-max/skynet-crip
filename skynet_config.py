@@ -1203,6 +1203,7 @@ DEPTH_THIN_ESCAPE_V2_MAX_RANK = 50
 #   maker limit above signal by 0.15%, TP=3.0%, SL=0.3%.
 MAKER_SHORT_V1_ENABLED = os.getenv("MAKER_SHORT_V1_ENABLED", "true").lower() == "true"
 MAKER_SHORT_V1_MIN_PC = float(os.getenv("MAKER_SHORT_V1_MIN_PC", "1.0"))
+MAKER_SHORT_V1_SCAN_MAX_PC = float(os.getenv("MAKER_SHORT_V1_SCAN_MAX_PC", "3.0"))
 MAKER_SHORT_V1_MIN_VOL = float(os.getenv("MAKER_SHORT_V1_MIN_VOL", "8.0"))
 MAKER_SHORT_V1_MAX_SPREAD_BPS = float(os.getenv("MAKER_SHORT_V1_MAX_SPREAD_BPS", "8.0"))
 MAKER_SHORT_V1_MAX_RANK = int(os.getenv("MAKER_SHORT_V1_MAX_RANK", "80"))
