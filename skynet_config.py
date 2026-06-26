@@ -1200,7 +1200,7 @@ DEPTH_THIN_ESCAPE_V2_MAX_RANK = 50
 # Research-only. Never sends real orders.
 # Best V18 lab profile:
 #   SHORT after positive impulse >=1%, vol>=8, spread<=8bps, rank<=80,
-#   maker limit above signal by 0.15%, TP=3.0%, SL=0.3%.
+#   maker limit above signal by 0.15%, live-shadow adjusted TP=0.75%, SL=0.50% after first live sample.
 MAKER_SHORT_V1_ENABLED = os.getenv("MAKER_SHORT_V1_ENABLED", "true").lower() == "true"
 MAKER_SHORT_V1_MIN_PC = float(os.getenv("MAKER_SHORT_V1_MIN_PC", "1.0"))
 MAKER_SHORT_V1_SCAN_MAX_PC = float(os.getenv("MAKER_SHORT_V1_SCAN_MAX_PC", "3.0"))
@@ -1209,8 +1209,8 @@ MAKER_SHORT_V1_MAX_SPREAD_BPS = float(os.getenv("MAKER_SHORT_V1_MAX_SPREAD_BPS",
 MAKER_SHORT_V1_MAX_RANK = int(os.getenv("MAKER_SHORT_V1_MAX_RANK", "80"))
 
 MAKER_SHORT_V1_OFFSET_PCT = float(os.getenv("MAKER_SHORT_V1_OFFSET_PCT", "0.15"))
-MAKER_SHORT_V1_TP_PCT = float(os.getenv("MAKER_SHORT_V1_TP_PCT", "3.0"))
-MAKER_SHORT_V1_SL_PCT = float(os.getenv("MAKER_SHORT_V1_SL_PCT", "0.3"))
+MAKER_SHORT_V1_TP_PCT = float(os.getenv("MAKER_SHORT_V1_TP_PCT", "0.75"))
+MAKER_SHORT_V1_SL_PCT = float(os.getenv("MAKER_SHORT_V1_SL_PCT", "0.50"))
 MAKER_SHORT_V1_COST_PCT = float(os.getenv("MAKER_SHORT_V1_COST_PCT", "0.03"))
 
 MAKER_SHORT_V1_WAIT_SECONDS = float(os.getenv("MAKER_SHORT_V1_WAIT_SECONDS", "300"))

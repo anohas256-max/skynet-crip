@@ -32,7 +32,7 @@ def calc_shadow_pnl(margin, leverage, move_pct, cost_pct):
 
 class MakerShortTp3Sl03Shadow:
     """
-    Research-only maker/limit SHORT shadow lane.
+    Research-only maker/limit SHORT shadow lane. Live-adjusted profile.
 
     Hypothesis from V18 maker offset lab:
       filter = FADE_POS_PC1_VOL8_SP8_R80
@@ -48,7 +48,7 @@ class MakerShortTp3Sl03Shadow:
       signal -> pending maker-limit -> fill/miss -> TP/SL/TIME.
     """
 
-    NAME = "MAKER_SHORT_TP3_SL03_SHADOW"
+    NAME = "MAKER_SHORT_TP075_SL05_SHADOW"
 
     def __init__(self, log_fn):
         self.log = log_fn
@@ -387,7 +387,7 @@ class MakerShortTp3Sl03Shadow:
         best = sorted(st["sym_net"].items(), key=lambda x: x[1], reverse=True)[:8]
         worst = sorted(st["sym_net"].items(), key=lambda x: x[1])[:8]
 
-        lines = ["=== MAKER_SHORT_TP3_SL03_SHADOW REPORT ==="]
+        lines = ["=== MAKER_SHORT_TP075_SL05_SHADOW REPORT ==="]
         lines.append(
             f"Params: pc>={p['min_pc']} vol>={p['min_vol']} spread<={p['max_spread']}bps "
             f"rank<={p['max_rank']} offset={p['offset_pct']}% TP={p['tp_pct']}% "
