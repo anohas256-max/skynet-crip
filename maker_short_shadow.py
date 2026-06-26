@@ -32,32 +32,44 @@ def calc_shadow_pnl(margin, leverage, move_pct, cost_pct):
 
 class MakerShortTp3Sl03Shadow:
     """
-    Research-only maker/limit SHORT shadow lane. Live-adjusted profile.
+    Research-only maker/limit SHORT shadow matrix.
 
-    Hypothesis from V18 maker offset lab:
-      filter = FADE_POS_PC1_VOL8_SP8_R80
-      side = SHORT
-      maker offset = +0.15%
-      TP = +3.0% short profit
-      SL = -0.3% short loss
-      cost model ~= 0.03%
+    It never sends real orders.
+    It tests several TP/SL profiles on the same maker-short signal:
+      signal -> pending maker-limit -> fill/miss -> profile-specific TP/SL/TIME.
 
-    Never sends real orders.
-    Never affects dry-live selectors.
-    It only tracks:
-      signal -> pending maker-limit -> fill/miss -> TP/SL/TIME.
+    Main reason:
+      TP=3.0 / SL=0.3 was too greedy in live:
+        7 pending, 5 fills, 4 SL, 1 TIME, 0 TP.
+      Now we test realistic exits in parallel.
     """
 
-    NAME = "MAKER_SHORT_TP075_SL05_SHADOW"
+    BASE_NAME = "MAKER_SHORT_MATRIX_SHADOW"
+
+    PROFILES = [
+        {"name": "MS_TP075_SL05", "tp": 0.75, "sl": 0.50, "offset": 0.15},
+        {"name": "MS_TP06_SL05",  "tp": 0.60, "sl": 0.50, "offset": 0.15},
+        {"name": "MS_TP10_SL05",  "tp": 1.00, "sl": 0.50, "offset": 0.15},
+        {"name": "MS_TP075_SL04", "tp": 0.75, "sl": 0.40, "offset": 0.15},
+        {"name": "MS_TP075_SL06", "tp": 0.75, "sl": 0.60, "offset": 0.15},
+        {"name": "MS_TP05_SL04",  "tp": 0.50, "sl": 0.40, "offset": 0.15},
+    ]
 
     def __init__(self, log_fn):
         self.log = log_fn
         self.pending = {}
         self.active = {}
         self.last_open = {}
+        self.last_poll = 0.0
+
+        self.global_stats = {
+            "seen": 0,
+            "base_match": 0,
+            "rejects": Counter(),
+        }
+
         self.stats = defaultdict(lambda: {
             "signals": 0,
-            "seen": 0,
             "pending_opened": 0,
             "filled": 0,
             "missed": 0,
@@ -68,20 +80,15 @@ class MakerShortTp3Sl03Shadow:
             "net": 0.0,
             "costs": 0.0,
             "reasons": Counter(),
-            "rejects": Counter(),
             "symbols": Counter(),
             "sym_net": defaultdict(float),
         })
-        self.last_poll = 0.0
 
     def enabled(self):
         return bool(getattr(cfg, "MAKER_SHORT_V1_ENABLED", True))
 
     def _params(self):
         return {
-            "offset_pct": sf(getattr(cfg, "MAKER_SHORT_V1_OFFSET_PCT", 0.15), 0.15),
-            "tp_pct": sf(getattr(cfg, "MAKER_SHORT_V1_TP_PCT", 3.0), 3.0),
-            "sl_pct": sf(getattr(cfg, "MAKER_SHORT_V1_SL_PCT", 0.3), 0.3),
             "cost_pct": sf(getattr(cfg, "MAKER_SHORT_V1_COST_PCT", 0.03), 0.03),
             "wait_seconds": sf(getattr(cfg, "MAKER_SHORT_V1_WAIT_SECONDS", 300), 300),
             "ttl_seconds": sf(getattr(cfg, "MAKER_SHORT_V1_TTL_SECONDS", 300), 300),
@@ -91,14 +98,22 @@ class MakerShortTp3Sl03Shadow:
             "max_active": si(getattr(cfg, "MAKER_SHORT_V1_MAX_ACTIVE", 3), 3),
             "cooldown": sf(getattr(cfg, "MAKER_SHORT_V1_COOLDOWN_SECONDS", 900), 900),
             "min_pc": sf(getattr(cfg, "MAKER_SHORT_V1_MIN_PC", 1.0), 1.0),
+            "max_scan_pc": sf(getattr(cfg, "MAKER_SHORT_V1_SCAN_MAX_PC", 3.0), 3.0),
             "min_vol": sf(getattr(cfg, "MAKER_SHORT_V1_MIN_VOL", 8.0), 8.0),
             "max_spread": sf(getattr(cfg, "MAKER_SHORT_V1_MAX_SPREAD_BPS", 8.0), 8.0),
             "max_rank": si(getattr(cfg, "MAKER_SHORT_V1_MAX_RANK", 80), 80),
             "poll_seconds": sf(getattr(cfg, "MAKER_SHORT_V1_POLL_SECONDS", 5.0), 5.0),
         }
 
-    def _key(self, symbol):
-        return str(symbol)
+    def _pkey(self, profile_name, symbol):
+        return f"{profile_name}|{symbol}"
+
+    def _profile_from_key(self, key):
+        name = key.split("|", 1)[0]
+        for p in self.PROFILES:
+            if p["name"] == name:
+                return p
+        return self.PROFILES[0]
 
     def _match(self, cand, current_time):
         p = self._params()
@@ -106,16 +121,6 @@ class MakerShortTp3Sl03Shadow:
         symbol = cand.get("symbol", "")
         if not symbol:
             return False, "NO_SYMBOL"
-
-        key = self._key(symbol)
-        if key in self.pending or key in self.active:
-            return False, "ALREADY_TRACKED"
-
-        if len(self.pending) >= p["max_pending"]:
-            return False, "MAX_PENDING"
-
-        if len(self.active) >= p["max_active"]:
-            return False, "MAX_ACTIVE"
 
         last = self.last_open.get(symbol, 0.0)
         if current_time - last < p["cooldown"]:
@@ -139,6 +144,9 @@ class MakerShortTp3Sl03Shadow:
         if pc < p["min_pc"]:
             return False, f"PC_LOW_{pc:+.2f}"
 
+        if pc > p["max_scan_pc"]:
+            return False, f"PC_HIGH_{pc:+.2f}"
+
         if vol < p["min_vol"]:
             return False, f"VOL_LOW_{vol:.1f}"
 
@@ -150,89 +158,115 @@ class MakerShortTp3Sl03Shadow:
 
         return True, "MATCH"
 
+    def _reject_tag(self, reason):
+        r = str(reason)
+        if r in ("COOLDOWN", "ALREADY_TRACKED"):
+            return None
+        if r.startswith("PC_LOW"):
+            return "PC_LOW"
+        if r.startswith("PC_HIGH"):
+            return "PC_HIGH"
+        if r.startswith("VOL_LOW"):
+            return "VOL_LOW"
+        if r.startswith("SPREAD_WIDE"):
+            return "SPREAD_WIDE"
+        if r.startswith("RANK_HIGH"):
+            return "RANK_HIGH"
+        if "DEPTH" in r:
+            return r
+        return r
+
     def maybe_open(self, cand, current_time, time_str):
         if not self.enabled():
             return []
 
-        st = self.stats[self.NAME]
-        st["seen"] += 1
+        self.global_stats["seen"] += 1
 
         ok, reason = self._match(cand, current_time)
         if not ok:
-            r = str(reason)
-            # Keep diagnostics compact. Do not log every reject line.
-            if not (
-                r == "ALREADY_TRACKED"
-                or r == "MAX_PENDING"
-                or r == "MAX_ACTIVE"
-                or r == "COOLDOWN"
-            ):
-                if r.startswith("PC_LOW"):
-                    tag = "PC_LOW"
-                elif r.startswith("VOL_LOW"):
-                    tag = "VOL_LOW"
-                elif r.startswith("SPREAD_WIDE"):
-                    tag = "SPREAD_WIDE"
-                elif r.startswith("RANK_HIGH"):
-                    tag = "RANK_HIGH"
-                elif "DEPTH" in r:
-                    tag = r
-                else:
-                    tag = r
-                st["rejects"][tag] += 1
+            tag = self._reject_tag(reason)
+            if tag:
+                self.global_stats["rejects"][tag] += 1
             return []
 
         p = self._params()
         symbol = cand.get("symbol")
         clean = cand.get("clean_symbol", symbol.replace("_USDT", ""))
         price = sf(cand.get("price"))
-        offset = p["offset_pct"]
-        limit_price = price * (1.0 + offset / 100.0)
-        key = self._key(symbol)
-
-        self.pending[key] = {
-            "key": key,
-            "symbol": symbol,
-            "clean_symbol": clean,
-            "signal_price": price,
-            "limit_price": limit_price,
-            "signal_time": current_time,
-            "created": current_time,
-            "price_change": sf(cand.get("price_change")),
-            "vol_ratio": sf(cand.get("vol_ratio")),
-            "spread_bps": sf(cand.get("spread_bps"), 999.0),
-            "rank": si(cand.get("current_turnover_rank"), 999999),
-            "score": cand.get("score", 0),
-            "max_seen_up_from_signal": 0.0,
-        }
+        self.global_stats["base_match"] += 1
         self.last_open[symbol] = current_time
 
-        st = self.stats[self.NAME]
-        st["signals"] += 1
-        st["pending_opened"] += 1
-        st["symbols"][clean] += 1
+        opened = []
 
-        self.log(
-            f"[{time_str}] MAKER_SHORT_PENDING | {self.NAME} | {clean} | "
-            f"signal={price:.8f} limit={limit_price:.8f} offset={offset:.2f}% "
-            f"pc={sf(cand.get('price_change')):+.2f}% vol=x{sf(cand.get('vol_ratio')):.1f} "
-            f"spread={sf(cand.get('spread_bps'),999):.2f}bps "
-            f"rank={si(cand.get('current_turnover_rank'),999999)} score={cand.get('score',0)}\n"
-        )
+        for prof in self.PROFILES:
+            profile_name = prof["name"]
+            key = self._pkey(profile_name, symbol)
 
-        return [self.NAME]
+            if key in self.pending or key in self.active:
+                continue
+
+            pending_for_profile = sum(1 for k in self.pending if k.startswith(profile_name + "|"))
+            active_for_profile = sum(1 for k in self.active if k.startswith(profile_name + "|"))
+
+            if pending_for_profile >= p["max_pending"]:
+                continue
+            if active_for_profile >= p["max_active"]:
+                continue
+
+            offset = sf(prof["offset"], 0.15)
+            limit_price = price * (1.0 + offset / 100.0)
+
+            self.pending[key] = {
+                "key": key,
+                "profile": profile_name,
+                "symbol": symbol,
+                "clean_symbol": clean,
+                "signal_price": price,
+                "limit_price": limit_price,
+                "signal_time": current_time,
+                "created": current_time,
+                "price_change": sf(cand.get("price_change")),
+                "vol_ratio": sf(cand.get("vol_ratio")),
+                "spread_bps": sf(cand.get("spread_bps"), 999.0),
+                "rank": si(cand.get("current_turnover_rank"), 999999),
+                "score": cand.get("score", 0),
+                "max_seen_up_from_signal": 0.0,
+                "tp_pct": sf(prof["tp"]),
+                "sl_pct": sf(prof["sl"]),
+                "offset_pct": offset,
+            }
+
+            st = self.stats[profile_name]
+            st["signals"] += 1
+            st["pending_opened"] += 1
+            st["symbols"][clean] += 1
+            opened.append(profile_name)
+
+            self.log(
+                f"[{time_str}] MAKER_SHORT_PENDING | {profile_name} | {clean} | "
+                f"signal={price:.8f} limit={limit_price:.8f} offset={offset:.2f}% "
+                f"TP={sf(prof['tp']):.2f}% SL={sf(prof['sl']):.2f}% "
+                f"pc={sf(cand.get('price_change')):+.2f}% vol=x{sf(cand.get('vol_ratio')):.1f} "
+                f"spread={sf(cand.get('spread_bps'),999):.2f}bps "
+                f"rank={si(cand.get('current_turnover_rank'),999999)} score={cand.get('score',0)}\n"
+            )
+
+        return opened
 
     def update_price(self, symbol, clean_symbol, price, current_time, time_str):
         if not self.enabled() or price <= 0:
             return
 
-        key = self._key(symbol)
+        keys = sorted(set(self.pending.keys()) | set(self.active.keys()))
+        for key in keys:
+            if not key.endswith("|" + symbol):
+                continue
 
-        if key in self.pending:
-            self._update_pending(key, price, current_time, time_str)
+            if key in self.pending:
+                self._update_pending(key, price, current_time, time_str)
 
-        if key in self.active:
-            self._update_active(key, price, current_time, time_str, source="TICK")
+            if key in self.active:
+                self._update_active(key, price, current_time, time_str, source="TICK")
 
     def _update_pending(self, key, price, current_time, time_str):
         p = self._params()
@@ -251,6 +285,7 @@ class MakerShortTp3Sl03Shadow:
 
         age = current_time - sf(w.get("signal_time"))
         clean = w.get("clean_symbol", key)
+        profile = w.get("profile", self.BASE_NAME)
 
         if price >= limit_price:
             self.pending.pop(key, None)
@@ -263,11 +298,10 @@ class MakerShortTp3Sl03Shadow:
                 "max_loss_pct": 0.0,
             }
 
-            st = self.stats[self.NAME]
-            st["filled"] += 1
+            self.stats[profile]["filled"] += 1
 
             self.log(
-                f"[{time_str}] MAKER_SHORT_FILL | {self.NAME} | {clean} | "
+                f"[{time_str}] MAKER_SHORT_FILL | {profile} | {clean} | "
                 f"limit={limit_price:.8f} now={price:.8f} age={age:.1f}s "
                 f"maxUpFromSignal={sf(w.get('max_seen_up_from_signal')):+.2f}%\n"
             )
@@ -276,12 +310,12 @@ class MakerShortTp3Sl03Shadow:
         if age >= p["wait_seconds"]:
             self.pending.pop(key, None)
 
-            st = self.stats[self.NAME]
+            st = self.stats[profile]
             st["missed"] += 1
             st["reasons"]["MISS_NO_FILL"] += 1
 
             self.log(
-                f"[{time_str}] MAKER_SHORT_MISS | {self.NAME} | {clean} | "
+                f"[{time_str}] MAKER_SHORT_MISS | {profile} | {clean} | "
                 f"signal={signal_price:.8f} limit={limit_price:.8f} now={price:.8f} "
                 f"age={age:.1f}s maxUpFromSignal={sf(w.get('max_seen_up_from_signal')):+.2f}%\n"
             )
@@ -304,10 +338,14 @@ class MakerShortTp3Sl03Shadow:
         age_from_signal = current_time - sf(w.get("signal_time"))
         age_from_fill = current_time - sf(w.get("fill_time"))
 
+        tp_pct = sf(w.get("tp_pct"), 0.75)
+        sl_pct = sf(w.get("sl_pct"), 0.50)
+        profile = w.get("profile", self.BASE_NAME)
+
         reason = None
-        if short_profit_pct >= p["tp_pct"]:
+        if short_profit_pct >= tp_pct:
             reason = "TP"
-        elif short_profit_pct <= -p["sl_pct"]:
+        elif short_profit_pct <= -sl_pct:
             reason = "SL"
         elif age_from_signal >= p["ttl_seconds"]:
             reason = "TIME"
@@ -323,7 +361,7 @@ class MakerShortTp3Sl03Shadow:
         )
 
         clean = w.get("clean_symbol", key)
-        st = self.stats[self.NAME]
+        st = self.stats[profile]
 
         st["closed"] += 1
         st["wins"] += int(net > 0)
@@ -335,7 +373,7 @@ class MakerShortTp3Sl03Shadow:
         st["sym_net"][clean] += net
 
         self.log(
-            f"[{time_str}] MAKER_SHORT_CLOSE | {self.NAME} | {clean} | {reason} | "
+            f"[{time_str}] MAKER_SHORT_CLOSE | {profile} | {clean} | {reason} | "
             f"Entry:{entry:.8f} Exit:{price:.8f} | Move:{short_profit_pct:+.2f}% | "
             f"Gross:{gross:+.2f}$ Net:{net:+.2f}$ Cost:{costs:.4f}$ | "
             f"MFE:{sf(w.get('max_profit_pct')):+.2f}% MAE:{sf(w.get('max_loss_pct')):+.2f}% | "
@@ -358,7 +396,12 @@ class MakerShortTp3Sl03Shadow:
             return
         self.last_poll = current_time
 
-        symbols = sorted(set(self.pending.keys()) | set(self.active.keys()))
+        symbols = sorted({
+            (v.get("symbol") or "").strip()
+            for v in list(self.pending.values()) + list(self.active.values())
+            if (v.get("symbol") or "").strip()
+        })
+
         for symbol in symbols:
             try:
                 url = f"https://contract.mexc.com/api/v1/contract/ticker?symbol={symbol}"
@@ -379,28 +422,38 @@ class MakerShortTp3Sl03Shadow:
 
     def format_report(self):
         p = self._params()
-        st = self.stats[self.NAME]
-        closed = st["closed"]
-        wr = (st["wins"] / closed * 100.0) if closed else 0.0
-        fill_base = st["pending_opened"]
-        fill_rate = (st["filled"] / fill_base * 100.0) if fill_base else 0.0
-        best = sorted(st["sym_net"].items(), key=lambda x: x[1], reverse=True)[:8]
-        worst = sorted(st["sym_net"].items(), key=lambda x: x[1])[:8]
+        lines = ["=== MAKER_SHORT_MATRIX_SHADOW REPORT ==="]
+        lines.append(
+            f"BaseFilter: pc>={p['min_pc']} pc<={p['max_scan_pc']} vol>={p['min_vol']} "
+            f"spread<={p['max_spread']}bps rank<={p['max_rank']} "
+            f"cost={p['cost_pct']}% wait={p['wait_seconds']}s ttl={p['ttl_seconds']}s"
+        )
+        lines.append(
+            f"Seen:{self.global_stats['seen']} BaseMatch:{self.global_stats['base_match']} "
+            f"Rejects:{dict(self.global_stats['rejects'])}"
+        )
 
-        lines = ["=== MAKER_SHORT_TP075_SL05_SHADOW REPORT ==="]
-        lines.append(
-            f"Params: pc>={p['min_pc']} vol>={p['min_vol']} spread<={p['max_spread']}bps "
-            f"rank<={p['max_rank']} offset={p['offset_pct']}% TP={p['tp_pct']}% "
-            f"SL={p['sl_pct']}% cost={p['cost_pct']}% wait={p['wait_seconds']}s ttl={p['ttl_seconds']}s"
-        )
-        lines.append(
-            f"Seen:{st['seen']} Signals:{st['signals']} PendingOpened:{st['pending_opened']} "
-            f"Filled:{st['filled']} Missed:{st['missed']} FillRate:{fill_rate:.1f}% "
-            f"Closed:{closed} Active:{len(self.active)} Pending:{len(self.pending)}"
-        )
-        lines.append(
-            f"Net:{st['net']:+.2f}$ Gross:{st['gross']:+.2f}$ Costs:-${st['costs']:.4f} "
-            f"WR:{wr:.1f}% Reasons:{dict(st['reasons'])} Rejects:{dict(st['rejects'])} "
-            f"Best:{best} Worst:{worst}"
-        )
+        rows = []
+        for prof in self.PROFILES:
+            name = prof["name"]
+            st = self.stats[name]
+            closed = st["closed"]
+            fill_base = st["pending_opened"]
+            wr = (st["wins"] / closed * 100.0) if closed else 0.0
+            fill_rate = (st["filled"] / fill_base * 100.0) if fill_base else 0.0
+            rows.append((st["net"], name, prof, st, closed, wr, fill_rate))
+
+        rows.sort(key=lambda x: x[0], reverse=True)
+
+        for net, name, prof, st, closed, wr, fill_rate in rows:
+            best = sorted(st["sym_net"].items(), key=lambda x: x[1], reverse=True)[:5]
+            worst = sorted(st["sym_net"].items(), key=lambda x: x[1])[:5]
+            lines.append(
+                f"{name}: TP={prof['tp']} SL={prof['sl']} OFF={prof['offset']} | "
+                f"Signals:{st['signals']} Filled:{st['filled']} Missed:{st['missed']} "
+                f"FillRate:{fill_rate:.1f}% Closed:{closed} "
+                f"Net:{st['net']:+.2f}$ Gross:{st['gross']:+.2f}$ Costs:-${st['costs']:.4f} "
+                f"WR:{wr:.1f}% Reasons:{dict(st['reasons'])} Best:{best} Worst:{worst}"
+            )
+
         return "\n".join(lines) + "\n"
