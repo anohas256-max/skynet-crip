@@ -57,6 +57,7 @@ class MakerShortTp3Sl03Shadow:
         self.last_open = {}
         self.stats = defaultdict(lambda: {
             "signals": 0,
+            "seen": 0,
             "pending_opened": 0,
             "filled": 0,
             "missed": 0,
@@ -67,6 +68,7 @@ class MakerShortTp3Sl03Shadow:
             "net": 0.0,
             "costs": 0.0,
             "reasons": Counter(),
+            "rejects": Counter(),
             "symbols": Counter(),
             "sym_net": defaultdict(float),
         })
@@ -152,8 +154,32 @@ class MakerShortTp3Sl03Shadow:
         if not self.enabled():
             return []
 
+        st = self.stats[self.NAME]
+        st["seen"] += 1
+
         ok, reason = self._match(cand, current_time)
         if not ok:
+            r = str(reason)
+            # Keep diagnostics compact. Do not log every reject line.
+            if not (
+                r == "ALREADY_TRACKED"
+                or r == "MAX_PENDING"
+                or r == "MAX_ACTIVE"
+                or r == "COOLDOWN"
+            ):
+                if r.startswith("PC_LOW"):
+                    tag = "PC_LOW"
+                elif r.startswith("VOL_LOW"):
+                    tag = "VOL_LOW"
+                elif r.startswith("SPREAD_WIDE"):
+                    tag = "SPREAD_WIDE"
+                elif r.startswith("RANK_HIGH"):
+                    tag = "RANK_HIGH"
+                elif "DEPTH" in r:
+                    tag = r
+                else:
+                    tag = r
+                st["rejects"][tag] += 1
             return []
 
         p = self._params()
@@ -368,12 +394,13 @@ class MakerShortTp3Sl03Shadow:
             f"SL={p['sl_pct']}% cost={p['cost_pct']}% wait={p['wait_seconds']}s ttl={p['ttl_seconds']}s"
         )
         lines.append(
-            f"Signals:{st['signals']} PendingOpened:{st['pending_opened']} "
+            f"Seen:{st['seen']} Signals:{st['signals']} PendingOpened:{st['pending_opened']} "
             f"Filled:{st['filled']} Missed:{st['missed']} FillRate:{fill_rate:.1f}% "
             f"Closed:{closed} Active:{len(self.active)} Pending:{len(self.pending)}"
         )
         lines.append(
             f"Net:{st['net']:+.2f}$ Gross:{st['gross']:+.2f}$ Costs:-${st['costs']:.4f} "
-            f"WR:{wr:.1f}% Reasons:{dict(st['reasons'])} Best:{best} Worst:{worst}"
+            f"WR:{wr:.1f}% Reasons:{dict(st['reasons'])} Rejects:{dict(st['rejects'])} "
+            f"Best:{best} Worst:{worst}"
         )
         return "\n".join(lines) + "\n"
