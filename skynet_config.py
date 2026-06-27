@@ -44,6 +44,9 @@ EXACT_BLACKLIST = [
     "NVIDIA", "ROBINHOOD", "ALUMINUM", "XPD", "B", "H", "ON",
     "US", "UB", "COPPER", "RIVER", "PENGU", "FARTCOIN",
     "PLAY", "TESLA", "NAS100", "US30", "XAUT", "XAU", "BTC", "SPX500"
+,
+    # observed toxic in live/shadow audit 2026-06-27
+    "JUP", "ENA", "AAVE", "TIA", "INJ"
 ]
 PARTIAL_BLACKLIST = ["TRUMP", "MAGA", "STOCK"]
 
@@ -951,9 +954,9 @@ def build_strategy_configs():
             silent=True, selector=True, require_depth=True,
             spread_limit_bps=5.0, skip_track=True,
         ),
-        StrategyConfig("YELLOW_SCORE2", "yellow_score2", 3.0, 0.8, silent=True),
-        StrategyConfig("YELLOW_SCORE2_TIGHT", "yellow_score2_tight", 3.0, 0.8, silent=True),
     ]
+
+        # observed toxic audit 2026-06-27: YELLOW_SCORE2 disabled; it was negative noise
 
     return {c.name: c for c in configs}
 
