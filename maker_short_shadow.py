@@ -35,24 +35,32 @@ class MakerShortTp3Sl03Shadow:
     Research-only maker/limit SHORT shadow matrix.
 
     It never sends real orders.
-    It tests several TP/SL profiles on the same maker-short signal:
+    It tests several offset + TP/SL profiles on the same maker-short signal:
       signal -> pending maker-limit -> fill/miss -> profile-specific TP/SL/TIME.
 
     Main reason:
       TP=3.0 / SL=0.3 was too greedy in live:
         7 pending, 5 fills, 4 SL, 1 TIME, 0 TP.
-      Now we test realistic exits in parallel.
+      Now we test realistic exits and closer maker offsets in parallel.
     """
 
     BASE_NAME = "MAKER_SHORT_MATRIX_SHADOW"
 
     PROFILES = [
-        {"name": "MS_TP075_SL05", "tp": 0.75, "sl": 0.50, "offset": 0.15},
-        {"name": "MS_TP06_SL05",  "tp": 0.60, "sl": 0.50, "offset": 0.15},
-        {"name": "MS_TP10_SL05",  "tp": 1.00, "sl": 0.50, "offset": 0.15},
-        {"name": "MS_TP075_SL04", "tp": 0.75, "sl": 0.40, "offset": 0.15},
-        {"name": "MS_TP075_SL06", "tp": 0.75, "sl": 0.60, "offset": 0.15},
-        {"name": "MS_TP05_SL04",  "tp": 0.50, "sl": 0.40, "offset": 0.15},
+        # More fills: closer maker offset. These are explore-only.
+        {"name": "MS_O05_TP05_SL04",  "tp": 0.50, "sl": 0.40, "offset": 0.05},
+        {"name": "MS_O05_TP06_SL05",  "tp": 0.60, "sl": 0.50, "offset": 0.05},
+        {"name": "MS_O05_TP075_SL05", "tp": 0.75, "sl": 0.50, "offset": 0.05},
+
+        # Middle offset.
+        {"name": "MS_O10_TP05_SL04",  "tp": 0.50, "sl": 0.40, "offset": 0.10},
+        {"name": "MS_O10_TP06_SL05",  "tp": 0.60, "sl": 0.50, "offset": 0.10},
+        {"name": "MS_O10_TP075_SL05", "tp": 0.75, "sl": 0.50, "offset": 0.10},
+
+        # Original offset family.
+        {"name": "MS_O15_TP05_SL04",  "tp": 0.50, "sl": 0.40, "offset": 0.15},
+        {"name": "MS_O15_TP06_SL05",  "tp": 0.60, "sl": 0.50, "offset": 0.15},
+        {"name": "MS_O15_TP075_SL05", "tp": 0.75, "sl": 0.50, "offset": 0.15},
     ]
 
     def __init__(self, log_fn):
