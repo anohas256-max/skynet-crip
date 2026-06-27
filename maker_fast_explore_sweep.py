@@ -43,21 +43,17 @@ def load_rows():
     con.close()
     return [dict(r) for r in rows]
 
-def sim(rows, pc_min, vol_min, spread_max, rank_max, offset, tp, sl, cost):
-    selected = []
-    for r in rows:
-        if f(r["price_change"]) < pc_min:
-            continue
-        if f(r["price_change"]) > 3.0:
-            continue
-        if f(r["vol_ratio"]) < vol_min:
-            continue
-        if f(r["spread_bps"], 999) > spread_max:
-            continue
-        if f(r["rank"], 999999) > rank_max:
-            continue
-        selected.append(r)
+def prefilter(rows, pc_min, vol_min, spread_max, rank_max):
+    return [
+        r for r in rows
+        if f(r["price_change"]) >= pc_min
+        and f(r["price_change"]) <= 3.0
+        and f(r["vol_ratio"]) >= vol_min
+        and f(r["spread_bps"], 999) <= spread_max
+        and f(r["rank"], 999999) <= rank_max
+    ]
 
+def sim(selected, offset, tp, sl, cost):
     filled = []
     missed = 0
 
@@ -66,12 +62,10 @@ def sim(rows, pc_min, vol_min, spread_max, rank_max, offset, tp, sl, cost):
         max_down = f(r["max_down"])
         close_pct = f(r["close_pct"])
 
-        # SHORT maker limit above signal by offset.
         if max_up < offset:
             missed += 1
             continue
 
-        # Conservative after fill.
         hit_tp = max_down <= -(tp - offset)
         hit_sl = max_up >= (offset + sl)
 
@@ -88,15 +82,14 @@ def sim(rows, pc_min, vol_min, spread_max, rank_max, offset, tp, sl, cost):
             gross = -close_pct + offset
             reason = "TIME"
 
-        net = gross - cost
-        filled.append((net, gross, reason, r))
+        filled.append((gross - cost, reason))
 
     n = len(selected)
     m = len(filled)
     if m == 0:
         return {
-            "signals": n, "filled": 0, "missed": missed, "fill_rate": 0.0,
-            "sum": 0.0, "avg": 0.0, "pos": 0.0,
+            "signals": n, "filled": 0, "missed": missed, "fill_rate": 0,
+            "sum": 0, "avg": 0, "pos": 0,
             "tp": 0, "sl": 0, "both": 0, "time": 0,
         }
 
@@ -105,14 +98,14 @@ def sim(rows, pc_min, vol_min, spread_max, rank_max, offset, tp, sl, cost):
         "signals": n,
         "filled": m,
         "missed": missed,
-        "fill_rate": m / n if n else 0.0,
+        "fill_rate": m / n if n else 0,
         "sum": sum(nets),
         "avg": sum(nets) / m,
         "pos": sum(1 for x in nets if x > 0) / m,
-        "tp": sum(1 for x in filled if x[2] == "TP"),
-        "sl": sum(1 for x in filled if x[2] == "SL"),
-        "both": sum(1 for x in filled if x[2] == "BOTH_AS_SL"),
-        "time": sum(1 for x in filled if x[2] == "TIME"),
+        "tp": sum(1 for _, reason in filled if reason == "TP"),
+        "sl": sum(1 for _, reason in filled if reason == "SL"),
+        "both": sum(1 for _, reason in filled if reason == "BOTH_AS_SL"),
+        "time": sum(1 for _, reason in filled if reason == "TIME"),
     }
 
 def fmt(r):
@@ -126,78 +119,85 @@ def fmt(r):
 def main():
     rows = load_rows()
     cut = int(len(rows) * 0.70)
-    train = rows[:cut]
-    test = rows[cut:]
+    train_rows = rows[:cut]
+    test_rows = rows[cut:]
 
-    pc_mins = [0.30, 0.40, 0.50, 0.60, 0.70, 0.85, 1.00]
-    vol_mins = [5.0, 6.0, 8.0, 10.0]
-    spreads = [8.0, 12.0, 15.0, 20.0, 30.0]
-    ranks = [30, 50, 80, 120, 200]
-    offsets = [0.00, 0.03, 0.05, 0.08, 0.10, 0.15]
-    tps = [0.30, 0.40, 0.50, 0.60, 0.75, 1.00]
-    sls = [0.30, 0.40, 0.50, 0.60, 0.80]
-    costs = [0.03, 0.05, 0.10]
+    # Сильно меньше сетка. Только реальные варианты, не весь космос.
+    filters = [
+        (0.50, 6.0, 15.0, 120),
+        (0.50, 8.0, 15.0, 120),
+        (0.60, 6.0, 15.0, 120),
+        (0.60, 8.0, 15.0, 120),
+        (0.70, 6.0, 15.0, 120),
+        (0.70, 8.0, 15.0, 120),
+        (0.85, 8.0, 15.0, 120),
+        (1.00, 8.0, 15.0, 120),
+        (0.70, 8.0, 20.0, 200),
+        (0.50, 8.0, 20.0, 200),
+    ]
+
+    offsets = [0.03, 0.05, 0.08, 0.10, 0.15]
+    exits = [
+        (0.40, 0.40),
+        (0.50, 0.40),
+        (0.50, 0.50),
+        (0.60, 0.50),
+        (0.75, 0.50),
+        (0.75, 0.60),
+        (1.00, 0.60),
+    ]
+    costs = [0.03, 0.05]
 
     results = []
+    total = 0
 
     for cost in costs:
-        for pc in pc_mins:
-            for vol in vol_mins:
-                for sp in spreads:
-                    for rk in ranks:
-                        for off in offsets:
-                            for tp in tps:
-                                for sl in sls:
-                                    a = sim(rows, pc, vol, sp, rk, off, tp, sl, cost)
-                                    if a["signals"] < 100:
-                                        continue
-                                    if a["filled"] < 50:
-                                        continue
+        for pc, vol, sp, rk in filters:
+            selected_all = prefilter(rows, pc, vol, sp, rk)
+            selected_tr = prefilter(train_rows, pc, vol, sp, rk)
+            selected_te = prefilter(test_rows, pc, vol, sp, rk)
 
-                                    tr = sim(train, pc, vol, sp, rk, off, tp, sl, cost)
-                                    te = sim(test, pc, vol, sp, rk, off, tp, sl, cost)
+            if len(selected_all) < 50:
+                continue
 
-                                    robust = (
-                                        tr["filled"] >= 30
-                                        and te["filled"] >= 15
-                                        and tr["sum"] > 0
-                                        and te["sum"] > 0
-                                        and a["avg"] > 0
-                                    )
+            for off in offsets:
+                for tp, sl in exits:
+                    total += 1
 
-                                    # Penalize configs that are too rare or only test-lucky.
-                                    score = (
-                                        a["sum"]
-                                        + 0.5 * te["sum"]
-                                        + 0.02 * a["filled"]
-                                        - 0.01 * a["missed"]
-                                    )
+                    a = sim(selected_all, off, tp, sl, cost)
+                    if a["filled"] < 20:
+                        continue
 
-                                    results.append((robust, score, cost, pc, vol, sp, rk, off, tp, sl, a, tr, te))
+                    tr = sim(selected_tr, off, tp, sl, cost)
+                    te = sim(selected_te, off, tp, sl, cost)
 
-    results.sort(key=lambda x: (x[0], x[1], x[10]["filled"], x[10]["avg"]), reverse=True)
+                    robust = (
+                        tr["filled"] >= 10
+                        and te["filled"] >= 5
+                        and tr["sum"] > 0
+                        and te["sum"] > 0
+                        and a["avg"] > 0
+                    )
+
+                    score = a["sum"] + 0.5 * te["sum"] + 0.01 * a["filled"] - 0.005 * a["missed"]
+                    results.append((robust, score, cost, pc, vol, sp, rk, off, tp, sl, a, tr, te))
+
+    results.sort(key=lambda x: (x[0], x[1], x[10]["avg"]), reverse=True)
+    robust_count = sum(1 for r in results if r[0])
 
     lines = []
     lines.append("=" * 120)
-    lines.append(f"MAKER FAST EXPLORE SWEEP UTC={datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S_UTC')}")
+    lines.append(f"MAKER FAST LIMITED SWEEP UTC={datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S_UTC')}")
     lines.append("=" * 120)
-    lines.append("Goal: stop waiting. Find high-frequency maker-short configs from V18 history.")
-    lines.append("Diagnostics only. Real trading OFF.")
-    lines.append(f"rows={len(rows)} train={len(train)} test={len(test)}")
-    lines.append("")
-    lines.append("Rule: SHORT fade after positive impulse. Conservative if TP and SL both hit => SL.")
-    lines.append("Min kept: signals>=100 and filled>=50.")
-    lines.append("")
-
-    robust_count = sum(1 for r in results if r[0])
-    lines.append(f"RESULTS={len(results)} ROBUST={robust_count}")
+    lines.append("Fast limited sweep, not huge brute force. Diagnostics only. Real trading OFF.")
+    lines.append(f"rows={len(rows)} train={len(train_rows)} test={len(test_rows)} tried={total} kept={len(results)} robust={robust_count}")
     lines.append("")
 
     lines.append("=" * 120)
     lines.append("TOP CONFIGS")
     lines.append("=" * 120)
 
-    for robust, score, cost, pc, vol, sp, rk, off, tp, sl, a, tr, te in results[:80]:
+    for robust, score, cost, pc, vol, sp, rk, off, tp, sl, a, tr, te in results[:60]:
         lines.append("")
         lines.append(
             f"{'[ROBUST]' if robust else '[weak]'} score={score:+.2f} "
@@ -214,9 +214,8 @@ def main():
     lines.append("=" * 120)
 
     if robust_count == 0:
-        lines.append("NO ROBUST HIGH-FREQUENCY MAKER-SHORT CONFIG FOUND.")
-        lines.append("Conclusion: do not keep waiting for this narrow maker-short idea.")
-        lines.append("Next action: either kill maker-short or use it only as low-priority research.")
+        lines.append("NO ROBUST CONFIG FOUND IN FAST LIMITED SWEEP.")
+        lines.append("Conclusion: maker-short is weak/rare. Do not keep waiting as main path.")
     else:
         best = next(r for r in results if r[0])
         _, score, cost, pc, vol, sp, rk, off, tp, sl, a, tr, te = best
@@ -228,11 +227,10 @@ def main():
         lines.append(f"ALL   {fmt(a)}")
         lines.append(f"TRAIN {fmt(tr)}")
         lines.append(f"TEST  {fmt(te)}")
-        lines.append("Next action: patch live shadow to this exact high-frequency profile, not wait blindly.")
 
     OUT.write_text("\n".join(lines))
     print(OUT)
-    print("\n".join(lines[:220]))
+    print("\n".join(lines[:260]))
 
 if __name__ == "__main__":
     main()
