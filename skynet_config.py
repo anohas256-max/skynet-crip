@@ -47,6 +47,9 @@ EXACT_BLACKLIST = [
 ,
     # observed toxic in live/shadow audit 2026-06-27
     "JUP", "ENA", "AAVE", "TIA", "INJ"
+,
+    # observed toxic in live/shadow audit 2026-06-28
+    "PUMPFUN", "RE", "MANTA"
 ]
 PARTIAL_BLACKLIST = ["TRUMP", "MAGA", "STOCK"]
 
@@ -1023,7 +1026,8 @@ YELLOW_SCORE3_FAST_MAX_FB = 2
 
 # Do not disable DEPTH_THIN globally.
 # Only observe an escape lane when the rejected signal is unusually strong.
-DEPTH_THIN_ESCAPE_ENABLED = True
+# audit 2026-06-28: DEPTH_THIN was 0% WR / strongly negative; escapes disabled by default
+DEPTH_THIN_ESCAPE_ENABLED = False
 DEPTH_THIN_ESCAPE_MIN_SCORE = 5
 DEPTH_THIN_ESCAPE_MIN_VOL = 15.0
 DEPTH_THIN_ESCAPE_MIN_PC = 0.30
@@ -1173,7 +1177,7 @@ COST_RESCUE_MAX_FB = 1
 # ============================================================
 # Do not disable DEPTH_THIN globally.
 # Only study narrow BLESS/SYN-like escape cases.
-DEPTH_THIN_ESCAPE_V2_ENABLED = True
+DEPTH_THIN_ESCAPE_V2_ENABLED = False
 DEPTH_THIN_ESCAPE_V2_MIN_SCORE = 5
 DEPTH_THIN_ESCAPE_V2_MIN_VOL = 12.0
 DEPTH_THIN_ESCAPE_V2_MIN_PC = 0.60
