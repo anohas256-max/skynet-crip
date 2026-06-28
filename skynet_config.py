@@ -923,19 +923,9 @@ def build_strategy_configs():
 
     # FULL SHADOW RESEARCH SET.
     configs += [
-        StrategyConfig("HYBRID_CORE", "hybrid_core", 4.5, 0.8, silent=True),
-        StrategyConfig("HYBRID_SCALP", "hybrid_scalp", 4.5, 0.8, silent=True),
-        StrategyConfig("HYBRID_FULL_MAIN_FOMO", "hybrid_full_main_fomo", 4.5, 0.8, silent=True),
-        StrategyConfig("HYBRID_FULL_ALL", "hybrid_full_all", 4.5, 0.8, silent=True),
-        StrategyConfig("HYBRID_FULL_ALL_SAFE_SHADOW", "hybrid_full_all_safe_shadow", 4.5, 0.8, silent=True),
 
-        StrategyConfig("MAIN_V92_TP10", "main_v92_tp10", 4.5, 1.0, silent=True),
-        StrategyConfig("MAIN_V92_TP08", "main_v92_tp08", 4.5, 0.8, silent=True),
         StrategyConfig("FILTERED_055_TP08", "filtered_055", 4.5, 0.8, silent=True),
         StrategyConfig("FILTERED_045", "filtered_045", 4.5, 0.8, silent=True),
-        StrategyConfig("FOMO_TEST", "fomo_test", 3.0, 0.8, silent=True),
-        StrategyConfig("YELLOW_SCORE3", "yellow_score3", 3.0, 0.8, silent=True),
-        StrategyConfig("YELLOW_SCORE3_FAST", "yellow_score3_fast", 3.0, 0.8, silent=True),
         StrategyConfig(
             "COST_NEAR_MISS_FAST", "cost_near_miss_fast",
             margin=3.0, tp=0.8, leverage=4, max_open=1,
@@ -957,6 +947,8 @@ def build_strategy_configs():
     ]
 
         # observed toxic audit 2026-06-27: YELLOW_SCORE2 disabled; it was negative noise
+
+        # observed toxic audit 2026-06-28: legacy instant shadows disabled; they ignored depth/selector and produced noisy SLs
 
     return {c.name: c for c in configs}
 
