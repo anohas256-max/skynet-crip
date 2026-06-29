@@ -7,15 +7,14 @@ ROOT = Path("/root/skynet")
 DB = ROOT / "data/v18_micro_paths.sqlite3"
 OUT = ROOT / "targeted_fade_v18_readiness_latest.txt"
 
-# These are based on V17 robust-ish fade candidates:
-# SHORT ABS030|SP3|R150|V5|IMB_ASK
-# SHORT ABS030|SP2|R150|V5|IMB_ASK10
+# V17 robust-ish candidates, checked properly on V18:
+# fade SHORT only after positive pump, not abs move.
 RULES = [
-    {"name": "SHORT_ABS030_SP3_R150_V5", "pc": 0.30, "spread": 3.0, "rank": 150, "vol": 5.0},
-    {"name": "SHORT_ABS030_SP2_R150_V5", "pc": 0.30, "spread": 2.0, "rank": 150, "vol": 5.0},
-    {"name": "SHORT_ABS050_SP3_R150_V5", "pc": 0.50, "spread": 3.0, "rank": 150, "vol": 5.0},
-    {"name": "SHORT_ABS070_SP3_R150_V8", "pc": 0.70, "spread": 3.0, "rank": 150, "vol": 8.0},
-    {"name": "SHORT_ABS030_SP5_R80_V8",  "pc": 0.30, "spread": 5.0, "rank": 80,  "vol": 8.0},
+    ("SHORT_PC030_SP3_R150_V5", 0.30, 3.0, 150, 5.0),
+    ("SHORT_PC030_SP2_R150_V5", 0.30, 2.0, 150, 5.0),
+    ("SHORT_PC050_SP3_R150_V5", 0.50, 3.0, 150, 5.0),
+    ("SHORT_PC070_SP3_R150_V8", 0.70, 3.0, 150, 8.0),
+    ("SHORT_PC030_SP5_R80_V8",  0.30, 5.0, 80,  8.0),
 ]
 
 TP_SL = [
@@ -32,137 +31,144 @@ TP_SL = [
 
 COSTS = [0.03, 0.05, 0.10, 0.17, 0.29]
 
-def val(row, names, default=0.0):
-    for n in names:
-        if n in row.keys():
-            try:
-                return float(row[n])
-            except Exception:
-                return default
-    return default
+MIN_ALL = 60
+MIN_TRAIN = 35
+MIN_TEST = 15
 
-def clean_symbol(s):
-    s = str(s or "").upper()
-    if s.endswith("_USDT"):
-        s = s[:-5]
-    if s.endswith("USDT"):
-        s = s[:-4]
-    return s
-
-def split(rows):
-    cut = int(len(rows) * 0.70)
-    return rows[:cut], rows[cut:]
-
-def eval_short(rows, rule, tp, sl, cost):
-    out = []
-    by_symbol = {}
-
-    for r in rows:
-        sym = clean_symbol(r["symbol"] if "symbol" in r.keys() else "")
-
-        pc = abs(val(r, ["price_change", "price_change_pct", "pc", "ret1"]))
-        vol = val(r, ["vol_ratio", "volume_ratio", "vol"])
-        spread = val(r, ["spread_bps", "spread"], 999)
-        rank = val(r, ["rank", "rank_abs_ret1", "turnover_rank"], 999)
-
-        if pc < rule["pc"]:
-            continue
-        if vol < rule["vol"]:
-            continue
-        if spread > rule["spread"]:
-            continue
-        if rank > rule["rank"]:
-            continue
-
-        max_up = val(r, ["max_up_pct", "max_up", "mfe_up_pct"], 0)
-        max_down = val(r, ["max_down_pct", "max_down", "mae_down_pct"], 0)
-        if max_down < 0:
-            max_down = abs(max_down)
-
-        # Conservative SHORT path:
-        # if both TP and SL touched, SL wins.
-        tp_hit = max_down >= tp
-        sl_hit = max_up >= sl
-
-        if sl_hit:
-            net = -sl - cost
-            reason = "SL"
-        elif tp_hit:
-            net = tp - cost
-            reason = "TP"
-        else:
-            close_pct = val(r, ["close_pct", "close_move_pct", "future_close_pct"], 0)
-            net = -close_pct - cost
-            reason = "TIME"
-
-        out.append(net)
-        by_symbol.setdefault(sym, [0, 0.0, 0, 0])
-        by_symbol[sym][0] += 1
-        by_symbol[sym][1] += net
-        by_symbol[sym][2] += 1 if net > 0 else 0
-        by_symbol[sym][3] += 1 if reason == "SL" else 0
-
-    if not out:
-        return None
-
-    pos = sum(x for x in out if x > 0)
-    neg = -sum(x for x in out if x < 0)
-    pf = pos / neg if neg > 0 else 999 if pos > 0 else 0
-    wr = sum(x > 0 for x in out) / len(out) * 100
-    s = sum(out)
-    avg = s / len(out)
-
-    symbols = sorted(
-        [(k, v[0], v[1], v[1] / v[0], v[2] / v[0] * 100, v[3] / v[0] * 100) for k, v in by_symbol.items()],
-        key=lambda x: x[2],
-        reverse=True
+def fmt(st):
+    if not st or st["n"] == 0:
+        return "n=0"
+    return (
+        f"n={st['n']:5d} sum={st['sum']:+9.2f}% avg={st['avg']:+8.4f}% "
+        f"wr={st['wr']:5.1f}% pf={st['pf']:6.2f} "
+        f"tp={st['tp']:4d} sl={st['sl']:4d} time={st['time']:4d}"
     )
 
-    return {"n": len(out), "sum": s, "avg": avg, "wr": wr, "pf": pf, "symbols": symbols}
+def calc_stats(con, where_sql, params, tp, sl, cost):
+    # Conservative SHORT:
+    # if SL and TP both touched, SL wins.
+    # SHORT loses when max_up >= SL.
+    # SHORT wins when abs(max_down) >= TP.
+    q = f"""
+    WITH x AS (
+      SELECT
+        CASE
+          WHEN max_up >= ? THEN -? - ?
+          WHEN ABS(max_down) >= ? THEN ? - ?
+          ELSE -COALESCE(close_pct, 0) - ?
+        END AS net,
+        CASE
+          WHEN max_up >= ? THEN 'SL'
+          WHEN ABS(max_down) >= ? THEN 'TP'
+          ELSE 'TIME'
+        END AS reason
+      FROM signals
+      WHERE {where_sql}
+    )
+    SELECT
+      COUNT(*) AS n,
+      COALESCE(SUM(net),0) AS sum_net,
+      COALESCE(AVG(net),0) AS avg_net,
+      COALESCE(AVG(CASE WHEN net > 0 THEN 1.0 ELSE 0.0 END),0) AS wr,
+      COALESCE(SUM(CASE WHEN net > 0 THEN net ELSE 0 END),0) AS pos_sum,
+      COALESCE(SUM(CASE WHEN net < 0 THEN -net ELSE 0 END),0) AS neg_sum,
+      SUM(CASE WHEN reason='TP' THEN 1 ELSE 0 END) AS tp_n,
+      SUM(CASE WHEN reason='SL' THEN 1 ELSE 0 END) AS sl_n,
+      SUM(CASE WHEN reason='TIME' THEN 1 ELSE 0 END) AS time_n
+    FROM x
+    """
+    row = con.execute(q, [sl, sl, cost, tp, tp, cost, cost, sl, tp] + list(params)).fetchone()
+    n = int(row["n"] or 0)
+    pos = float(row["pos_sum"] or 0)
+    neg = float(row["neg_sum"] or 0)
+    pf = pos / neg if neg > 0 else 999 if pos > 0 else 0
+    return {
+        "n": n,
+        "sum": float(row["sum_net"] or 0),
+        "avg": float(row["avg_net"] or 0),
+        "wr": float(row["wr"] or 0) * 100,
+        "pf": pf,
+        "tp": int(row["tp_n"] or 0),
+        "sl": int(row["sl_n"] or 0),
+        "time": int(row["time_n"] or 0),
+    }
 
-def fmt(x):
-    if not x:
-        return "n=0"
-    return f"n={x['n']:5d} sum={x['sum']:+9.2f}% avg={x['avg']:+8.4f}% wr={x['wr']:5.1f}% pf={x['pf']:6.2f}"
+def symbol_stats(con, where_sql, params, tp, sl, cost):
+    q = f"""
+    WITH x AS (
+      SELECT
+        clean_symbol AS symbol,
+        CASE
+          WHEN max_up >= ? THEN -? - ?
+          WHEN ABS(max_down) >= ? THEN ? - ?
+          ELSE -COALESCE(close_pct, 0) - ?
+        END AS net
+      FROM signals
+      WHERE {where_sql}
+    )
+    SELECT
+      symbol,
+      COUNT(*) AS n,
+      SUM(net) AS sum_net,
+      AVG(net) AS avg_net,
+      AVG(CASE WHEN net > 0 THEN 1.0 ELSE 0 END) AS wr
+    FROM x
+    GROUP BY symbol
+    HAVING n >= 2
+    ORDER BY sum_net DESC
+    LIMIT 12
+    """
+    rows = con.execute(q, [sl, sl, cost, tp, tp, cost, cost] + list(params)).fetchall()
+    return rows
 
 def main():
     con = sqlite3.connect(DB)
     con.row_factory = sqlite3.Row
-    rows = con.execute("SELECT * FROM signals ORDER BY id").fetchall()
-    con.close()
 
-    train, test = split(rows)
+    row = con.execute("SELECT COUNT(*) n, MIN(id) min_id, MAX(id) max_id FROM signals").fetchone()
+    total = int(row["n"])
+    min_id = int(row["min_id"])
+    max_id = int(row["max_id"])
+    split_id = min_id + int((max_id - min_id) * 0.70)
+
     results = []
 
-    for rule in RULES:
+    for name, pc, spread, rank, vol in RULES:
+        base_where = """
+          price_change >= ?
+          AND vol_ratio >= ?
+          AND spread_bps <= ?
+          AND rank <= ?
+          AND closed = 1
+        """
+        base_params = [pc, vol, spread, rank]
+
         for tp, sl in TP_SL:
             for cost in COSTS:
-                all_s = eval_short(rows, rule, tp, sl, cost)
-                tr_s = eval_short(train, rule, tp, sl, cost)
-                te_s = eval_short(test, rule, tp, sl, cost)
-
-                if not all_s or not tr_s or not te_s:
-                    continue
+                all_st = calc_stats(con, base_where, base_params, tp, sl, cost)
+                tr_st = calc_stats(con, base_where + " AND id <= ?", base_params + [split_id], tp, sl, cost)
+                te_st = calc_stats(con, base_where + " AND id > ?", base_params + [split_id], tp, sl, cost)
 
                 robust = (
-                    all_s["n"] >= 80 and tr_s["n"] >= 50 and te_s["n"] >= 20
-                    and all_s["sum"] > 0 and tr_s["sum"] > 0 and te_s["sum"] > 0
-                    and all_s["pf"] > 1.05 and te_s["pf"] > 1.02
-                    and all_s["avg"] > 0.005
+                    all_st["n"] >= MIN_ALL and tr_st["n"] >= MIN_TRAIN and te_st["n"] >= MIN_TEST
+                    and all_st["sum"] > 0 and tr_st["sum"] > 0 and te_st["sum"] > 0
+                    and all_st["avg"] > 0.005
+                    and all_st["pf"] > 1.05
+                    and te_st["pf"] > 1.02
                 )
 
-                score = all_s["sum"] + tr_s["sum"] * 0.5 + te_s["sum"] * 2 + all_s["pf"]
-                results.append((robust, score, rule, tp, sl, cost, all_s, tr_s, te_s))
+                score = all_st["sum"] + tr_st["sum"] * 0.5 + te_st["sum"] * 2.0 + all_st["pf"]
+                results.append((robust, score, name, pc, spread, rank, vol, tp, sl, cost, all_st, tr_st, te_st, base_where, base_params))
 
     results.sort(key=lambda x: (x[0], x[1]), reverse=True)
 
     lines = []
     lines.append("=" * 120)
-    lines.append(f"TARGETED FADE V18 READINESS UTC={datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S_UTC')}")
+    lines.append(f"TARGETED FADE V18 READINESS FAST SQL UTC={datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S_UTC')}")
     lines.append("=" * 120)
     lines.append(f"db={DB}")
-    lines.append(f"rows={len(rows)} train={len(train)} test={len(test)}")
-    lines.append("Goal: verify V17 robust-ish SHORT fade rules on V18 path recorder.")
+    lines.append(f"rows={total} split_id={split_id}")
+    lines.append("Goal: verify V17 fade-short rules on V18 path recorder using positive pump only.")
     lines.append("Real remains OFF.")
     lines.append("")
 
@@ -170,42 +176,52 @@ def main():
     lines.append(f"robust_count={robust_count}")
     lines.append("")
 
-    lines.append("=== ROBUST ===")
-    for robust, score, rule, tp, sl, cost, all_s, tr_s, te_s in results:
-        if not robust:
-            continue
-        lines.append("")
-        lines.append(f"[ROBUST] score={score:.2f} rule={rule['name']} TP={tp} SL={sl} cost={cost}")
-        lines.append("  ALL   " + fmt(all_s))
-        lines.append("  TRAIN " + fmt(tr_s))
-        lines.append("  TEST  " + fmt(te_s))
-        lines.append("  top symbols:")
-        for sym in all_s["symbols"][:12]:
-            lines.append(f"    {sym[0]:<12} n={sym[1]:4d} sum={sym[2]:+8.2f}% avg={sym[3]:+7.4f}% wr={sym[4]:5.1f}% sl={sym[5]:5.1f}%")
+    lines.append("=== ROBUST CONFIGS ===")
+    if robust_count == 0:
+        lines.append("NO ROBUST CONFIGS.")
+    else:
+        for r in results:
+            robust, score, name, pc, spread, rank, vol, tp, sl, cost, all_st, tr_st, te_st, where_sql, params = r
+            if not robust:
+                continue
+            lines.append("")
+            lines.append(f"[ROBUST] score={score:.2f} {name} TP={tp} SL={sl} cost={cost}")
+            lines.append("  ALL   " + fmt(all_st))
+            lines.append("  TRAIN " + fmt(tr_st))
+            lines.append("  TEST  " + fmt(te_st))
+            syms = symbol_stats(con, where_sql, params, tp, sl, cost)
+            lines.append("  symbols:")
+            for s in syms:
+                lines.append(
+                    f"    {s['symbol']:<12} n={int(s['n']):4d} "
+                    f"sum={float(s['sum_net']):+8.2f}% avg={float(s['avg_net']):+7.4f}% "
+                    f"wr={float(s['wr'] or 0)*100:5.1f}%"
+                )
 
     lines.append("")
-    lines.append("=== TOP 30 WEAK/ALL ===")
-    for robust, score, rule, tp, sl, cost, all_s, tr_s, te_s in results[:30]:
+    lines.append("=== TOP 40 ALL CONFIGS ===")
+    for r in results[:40]:
+        robust, score, name, pc, spread, rank, vol, tp, sl, cost, all_st, tr_st, te_st, where_sql, params = r
         tag = "ROBUST" if robust else "weak"
         lines.append("")
-        lines.append(f"[{tag}] score={score:.2f} rule={rule['name']} TP={tp} SL={sl} cost={cost}")
-        lines.append("  ALL   " + fmt(all_s))
-        lines.append("  TRAIN " + fmt(tr_s))
-        lines.append("  TEST  " + fmt(te_s))
-        lines.append("  top symbols: " + ", ".join(f"{s[0]}:{s[1]}/{s[2]:+.2f}%" for s in all_s["symbols"][:8]))
+        lines.append(f"[{tag}] score={score:.2f} {name} TP={tp} SL={sl} cost={cost}")
+        lines.append("  ALL   " + fmt(all_st))
+        lines.append("  TRAIN " + fmt(tr_st))
+        lines.append("  TEST  " + fmt(te_st))
 
     lines.append("")
     lines.append("=" * 120)
     lines.append("DECISION")
     lines.append("=" * 120)
     if robust_count:
-        lines.append("There are V18-confirmed fade candidates. Next step: build one shadow-only fade lane from the exact best rule, not real.")
+        lines.append("V18 confirms at least one fade-short candidate. Next step: one shadow-only live lane from exact best config.")
     else:
-        lines.append("No V18-confirmed robust fade candidate. V17 fade edge likely overfit/stale. Do not build real from it.")
-        lines.append("Next practical path: external/catalyst/cross-market edge, or proper maker book simulation.")
+        lines.append("V18 does NOT confirm V17 fade-short edge. Do not make this real.")
+        lines.append("Taker-scalper remains rejected. Next serious path: external/catalyst/cross-market/funding/OI source or true maker book simulator.")
 
     OUT.write_text("\n".join(lines))
     print("\n".join(lines))
+    con.close()
 
 if __name__ == "__main__":
     main()
