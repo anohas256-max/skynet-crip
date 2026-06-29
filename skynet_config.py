@@ -50,6 +50,9 @@ EXACT_BLACKLIST = [
 ,
     # observed toxic in live/shadow audit 2026-06-28
     "PUMPFUN", "RE", "MANTA"
+,
+    # observed toxic in clean global 6h audit 2026-06-29
+    "WLD"
 ]
 PARTIAL_BLACKLIST = ["TRUMP", "MAGA", "STOCK"]
 
@@ -952,6 +955,8 @@ def build_strategy_configs():
         # observed toxic audit 2026-06-27: YELLOW_SCORE2 disabled; it was negative noise
 
         # observed toxic audit 2026-06-28: legacy instant shadows disabled; they ignored depth/selector and produced noisy SLs
+
+        # audit 2026-06-29: losing exec-shadow lanes disabled; keep META/SMART strict + skip tracker for clean evidence
 
     return {c.name: c for c in configs}
 
