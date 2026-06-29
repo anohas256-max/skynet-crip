@@ -24,6 +24,10 @@ LIVE_DRY_RUN = os.getenv("LIVE_DRY_RUN", "true").lower() == "true"
 # Multi dry-live: несколько кандидатов параллельно с отдельным LiveNet/ShadowNet/Diff.
 # Реальный live потом должен быть только один победитель.
 DEFAULT_LIVE_DRY_TRACKS = "SMART_V2_STRICT_CLEAN_MO1,SMART_V2_STRICT_OI_MO1,META_V12_EXEC_SAFE_MO1"
+# Clean core mode: keep only real-candidate dry tracks in StrategyConfig list.
+# Research fade runs separately via research_fade_shadow.py and is never real.
+CLEAN_CORE_ONLY = os.getenv("CLEAN_CORE_ONLY", "true").lower() == "true"
+
 LIVE_DRY_TRACKS = [
     x.strip()
     for x in os.getenv("LIVE_DRY_TRACKS", DEFAULT_LIVE_DRY_TRACKS).split(",")
@@ -53,6 +57,9 @@ EXACT_BLACKLIST = [
 ,
     # observed toxic in clean global 6h audit 2026-06-29
     "WLD"
+,
+    # repeated DEPTH_THIN WOULD_SL spam 2026-06-29
+    "PEPE"
 ]
 PARTIAL_BLACKLIST = ["TRUMP", "MAGA", "STOCK"]
 
@@ -973,6 +980,15 @@ def build_strategy_configs():
     }
     configs = [c for c in configs if c.name not in DISABLED_STRATEGY_NAMES]
 
+    # audit 2026-06-29: clean core only final strategy filter
+    CORE_ONLY_STRATEGY_NAMES = {
+        "SMART_V2_STRICT_CLEAN_MO1",
+        "SMART_V2_STRICT_OI_MO1",
+        "META_V12_EXEC_SAFE_MO1",
+    }
+    if CLEAN_CORE_ONLY:
+        configs = [c for c in configs if c.name in CORE_ONLY_STRATEGY_NAMES]
+
     return {c.name: c for c in configs}
 
 
@@ -983,6 +999,7 @@ def build_strategy_configs():
 # SHORT ABS030|SP3|R150|V5|IMB_ASK
 # This is research-only. It never sends real orders and does not affect dry-live.
 RESEARCH_FADE_V1_ENABLED = os.getenv("RESEARCH_FADE_V1_ENABLED", "true").lower() == "true"
+RESEARCH_FADE_V1_PROFILES = os.getenv("RESEARCH_FADE_V1_PROFILES", "CORE_SP2_ASK10")
 RESEARCH_FADE_V1_SIDE = os.getenv("RESEARCH_FADE_V1_SIDE", "SHORT")
 RESEARCH_FADE_V1_TTL_SECONDS = float(os.getenv("RESEARCH_FADE_V1_TTL_SECONDS", "300"))
 RESEARCH_FADE_V1_MARGIN = float(os.getenv("RESEARCH_FADE_V1_MARGIN", "3.0"))

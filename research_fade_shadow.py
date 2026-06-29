@@ -96,6 +96,9 @@ class ResearchFadeV1Shadow:
 
     def __init__(self, log_fn):
         self.log = log_fn
+        allowed_raw = str(getattr(cfg, "RESEARCH_FADE_V1_PROFILES", "CORE_SP2_ASK10") or "")
+        allowed = {x.strip() for x in allowed_raw.split(",") if x.strip()}
+        self.profiles = [p for p in self.PROFILES if not allowed or p["name"] in allowed]
         self.active = {}
         self.last_open = {}
         self.stats = defaultdict(lambda: {
@@ -185,7 +188,7 @@ class ResearchFadeV1Shadow:
 
         cand["_current_time"] = current_time
 
-        for profile in self.PROFILES:
+        for profile in self.profiles:
             ok, reason = self._matches_profile(cand, profile)
             if not ok:
                 continue
@@ -327,7 +330,7 @@ class ResearchFadeV1Shadow:
         total_closed = 0
         total_net = 0.0
 
-        for profile in [p["name"] for p in self.PROFILES]:
+        for profile in [p["name"] for p in self.profiles]:
             st = self.stats[profile]
             closed = st["closed"]
             wr = (st["wins"] / closed * 100.0) if closed else 0.0
