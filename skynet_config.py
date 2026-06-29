@@ -958,6 +958,21 @@ def build_strategy_configs():
 
         # audit 2026-06-29: losing exec-shadow lanes disabled; keep META/SMART strict + skip tracker for clean evidence
 
+    # audit 2026-06-29: final disabled strategy filter for losing exec-shadow lanes
+    DISABLED_STRATEGY_NAMES = {
+        "MAIN_V92_TP08_EXEC_5",
+        "MAIN_V92_TP08_EXEC_7",
+        "MAIN_V92_TP08_EXEC_10",
+        "HYBRID_FULL_MAIN_FOMO_EXEC_5",
+        "HYBRID_FULL_MAIN_FOMO_EXEC_7",
+        "HYBRID_FULL_MAIN_FOMO_EXEC_10",
+        "MAIN_V92_TP08_EXEC_7_NF_TEST",
+        "HYBRID_FULL_MAIN_FOMO_EXEC_7_NF_TEST",
+        "MAIN_V92_TP08_EXEC_7_BE_V2",
+        "HYBRID_FULL_MAIN_FOMO_EXEC_7_BE_V2",
+    }
+    configs = [c for c in configs if c.name not in DISABLED_STRATEGY_NAMES]
+
     return {c.name: c for c in configs}
 
 
