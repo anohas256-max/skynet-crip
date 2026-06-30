@@ -3,6 +3,7 @@ import re
 from collections import defaultdict, Counter
 from pathlib import Path
 from datetime import datetime, timezone
+import skynet_config as cfg
 
 ROOT = Path("/root/skynet")
 LOGS = [ROOT / "skynet_3h.log", ROOT / "skynet_12h.log", ROOT / "skynet_48h.log"]
@@ -87,7 +88,12 @@ def main(stdout=False):
     lines.append(f"RESEARCH FADE V1 LIVE SHADOW REPORT UTC={ts()}")
     lines.append("=" * 90)
     lines.append(f"opens={len(opens)} closes={len(closes)} active_estimate={max(0, len(opens)-len(closes))}")
-    lines.append(f"configured_profile={getattr(cfg, "RESEARCH_FADE_V1_PROFILES", "-")} TP={getattr(cfg, "RESEARCH_FADE_V1_TP_PCT", "-")} SL={getattr(cfg, "RESEARCH_FADE_V1_SL_PCT", "-")}")
+    lines.append(
+        "configured_profile="
+        f"{getattr(cfg, 'RESEARCH_FADE_V1_PROFILES', '-')} "
+        f"TP={getattr(cfg, 'RESEARCH_FADE_V1_TP_PCT', '-')} "
+        f"SL={getattr(cfg, 'RESEARCH_FADE_V1_SL_PCT', '-')}"
+    )
 
     if len(opens) > 0 and len(closes) == 0:
         lines.append("WARNING: fade has opens but zero closes. Check direct polling / TTL close wiring.")
