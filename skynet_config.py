@@ -999,7 +999,7 @@ def build_strategy_configs():
 # SHORT ABS030|SP3|R150|V5|IMB_ASK
 # This is research-only. It never sends real orders and does not affect dry-live.
 RESEARCH_FADE_V1_ENABLED = os.getenv("RESEARCH_FADE_V1_ENABLED", "true").lower() == "true"
-RESEARCH_FADE_V1_PROFILES = os.getenv("RESEARCH_FADE_V1_PROFILES", "CORE_SP2_ASK10")
+RESEARCH_FADE_V1_PROFILES = os.getenv("RESEARCH_FADE_V1_PROFILES", "V18_SHORT_PC030_SP3_R150_V5")
 RESEARCH_FADE_V1_SIDE = os.getenv("RESEARCH_FADE_V1_SIDE", "SHORT")
 RESEARCH_FADE_V1_TTL_SECONDS = float(os.getenv("RESEARCH_FADE_V1_TTL_SECONDS", "300"))
 RESEARCH_FADE_V1_MARGIN = float(os.getenv("RESEARCH_FADE_V1_MARGIN", "3.0"))
@@ -1016,6 +1016,8 @@ RESEARCH_FADE_V1_IMB5_MAX = float(os.getenv("RESEARCH_FADE_V1_IMB5_MAX", "-0.20"
 RESEARCH_FADE_V1_MAX_OPEN_TOTAL = int(os.getenv("RESEARCH_FADE_V1_MAX_OPEN_TOTAL", "9"))
 RESEARCH_FADE_V1_MAX_OPEN_PER_PROFILE = int(os.getenv("RESEARCH_FADE_V1_MAX_OPEN_PER_PROFILE", "3"))
 RESEARCH_FADE_V1_POLL_SECONDS = float(os.getenv("RESEARCH_FADE_V1_POLL_SECONDS", "20"))
+RESEARCH_FADE_V1_TP_PCT = float(os.getenv("RESEARCH_FADE_V1_TP_PCT", "3.0"))
+RESEARCH_FADE_V1_SL_PCT = float(os.getenv("RESEARCH_FADE_V1_SL_PCT", "0.3"))
 
 
 # ============================================================

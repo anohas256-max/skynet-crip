@@ -55,6 +55,15 @@ class ResearchFadeV1Shadow:
     # - SPIKE: violent move fade, still controlled
     PROFILES = [
         {
+            "name": "V18_SHORT_PC030_SP3_R150_V5",
+            "max_spread": 3.0,
+            "imb5_max": None,
+            "min_abs_pc": 0.30,
+            "positive_only": True,
+            "min_vol": 5.0,
+            "max_rank": 150,
+        },
+        {
             "name": "CORE_SP2_ASK10",
             "max_spread": 2.0,
             "imb5_max": -0.10,
@@ -158,8 +167,12 @@ class ResearchFadeV1Shadow:
         vol = sf(cand.get("vol_ratio"))
         imb5 = sf(cand.get("imb_5"), 0.0)
 
-        if abs(pc) < profile["min_abs_pc"]:
-            return False, "PC_TOO_SMALL"
+        if profile.get("positive_only", False):
+            if pc < profile["min_abs_pc"]:
+                return False, "PC_NOT_POSITIVE_PUMP"
+        else:
+            if abs(pc) < profile["min_abs_pc"]:
+                return False, "PC_TOO_SMALL"
 
         if spread > profile["max_spread"]:
             return False, f"SPREAD_WIDE_{spread:.2f}"
@@ -170,7 +183,8 @@ class ResearchFadeV1Shadow:
         if vol < profile["min_vol"]:
             return False, f"VOL_LOW_{vol:.1f}"
 
-        if imb5 > profile["imb5_max"]:
+        imb5_max = profile.get("imb5_max")
+        if imb5_max is not None and imb5 > imb5_max:
             return False, f"IMB_NOT_ASK_{imb5:+.2f}"
 
         return True, "MATCH"
@@ -290,7 +304,17 @@ class ResearchFadeV1Shadow:
         ttl = sf(getattr(cfg, "RESEARCH_FADE_V1_TTL_SECONDS", 300))
         age = current_time - sf(w.get("time"))
 
-        if age < ttl:
+        tp_pct = sf(getattr(cfg, "RESEARCH_FADE_V1_TP_PCT", 3.0))
+        sl_pct = sf(getattr(cfg, "RESEARCH_FADE_V1_SL_PCT", 0.3))
+
+        reason = None
+        if sl_pct > 0 and short_profit_pct <= -sl_pct:
+            reason = "SL"
+        elif tp_pct > 0 and short_profit_pct >= tp_pct:
+            reason = "TP"
+        elif age >= ttl:
+            reason = "TIME_5M"
+        else:
             return
 
         gross, net, costs = calc_net_pnl(
@@ -299,7 +323,6 @@ class ResearchFadeV1Shadow:
             short_profit_pct,
         )
 
-        reason = "TIME_5M"
         profile = w.get("profile", "UNKNOWN")
         st = self.stats[profile]
 
