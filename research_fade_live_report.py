@@ -87,7 +87,7 @@ def main(stdout=False):
     lines.append(f"RESEARCH FADE V1 LIVE SHADOW REPORT UTC={ts()}")
     lines.append("=" * 90)
     lines.append(f"opens={len(opens)} closes={len(closes)} active_estimate={max(0, len(opens)-len(closes))}")
-    lines.append("profiles_v3=CORE_SP2_ASK10,CORE_SP3_ASK20,HF_SP5_ASK10,SPIKE_SP7; old STRICT/MID/WIDE are historical if present")
+    lines.append(f"configured_profile={getattr(cfg, "RESEARCH_FADE_V1_PROFILES", "-")} TP={getattr(cfg, "RESEARCH_FADE_V1_TP_PCT", "-")} SL={getattr(cfg, "RESEARCH_FADE_V1_SL_PCT", "-")}")
 
     if len(opens) > 0 and len(closes) == 0:
         lines.append("WARNING: fade has opens but zero closes. Check direct polling / TTL close wiring.")
