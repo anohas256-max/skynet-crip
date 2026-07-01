@@ -722,6 +722,7 @@ async def scan_futures():
 
                     selector_candidates = {name: [] for name in selector_names}
                     maker_scan_candidates = []  # independent high-PC stream for maker-short shadow
+                    fade_scan_candidates = []  # independent raw anomaly stream for V18 fade-short shadow
 
                     # Current rolling-24h turnover universe rank from MEXC ticker amount24.
                     # This is live-compatible and approximates ROLL24_TURNOVER_TOP_N.
@@ -865,6 +866,18 @@ async def scan_futures():
                         if maker_scan_ok:
                             maker_scan_candidates.append(candidate)
 
+                        # V18 fade-short live shadow must observe raw anomaly stream,
+                        # not only selector-approved candidates.
+                        # Real/offline gate is still inside research_fade_shadow.py after depth enrichment.
+                        fade_scan_ok = (
+                            getattr(cfg, "RESEARCH_FADE_V1_ENABLED", True)
+                            and price_change >= float(os.getenv("RESEARCH_FADE_V1_MIN_PC", "0.30"))
+                            and vol_ratio >= float(os.getenv("RESEARCH_FADE_V1_MIN_VOL", "5.0"))
+                            and current_turnover_rank.get(symbol, 999999) <= int(float(os.getenv("RESEARCH_FADE_V1_MAX_RANK", "150")))
+                        )
+                        if fade_scan_ok:
+                            fade_scan_candidates.append(candidate)
+
                         all_entered = []
                         visible_entered = []
                         skip_reasons = []
@@ -978,14 +991,37 @@ async def scan_futures():
                             maker_shadow.maybe_open(_cand, current_time, snapshot_time_str)
 
                     # Research-only fade shadow opens after depth enrichment.
-                    # It observes the same live candidate stream but never affects selector/dry/real.
+                    # IMPORTANT:
+                    # Fade V18 rule is validated on raw anomaly recorder stream, not on selector-pass stream.
+                    # So feed it both selector candidates and independent raw fade_scan_candidates.
                     fade_unique = {}
                     for _cand_list in selector_candidates.values():
                         for _cand in _cand_list:
                             fade_unique[_cand["symbol"]] = _cand
-                    for _cand in fade_unique.values():
-                        fade_shadow.maybe_open(_cand, current_time, snapshot_time_str)
-                        maker_shadow.maybe_open(_cand, current_time, snapshot_time_str)
+                    for _cand in fade_scan_candidates:
+                        fade_unique[_cand["symbol"]] = _cand
+
+                    if fade_unique:
+                        fade_pack = {"RESEARCH_FADE_V1_SHADOW": list(fade_unique.values())}
+                        await eng.enrich_selector_candidates_with_depth(session, fade_pack, snapshot_time_str)
+
+                        depth_ok = 0
+                        matched = 0
+                        for _cand in fade_pack["RESEARCH_FADE_V1_SHADOW"]:
+                            if _cand.get("depth_available") and not _cand.get("depth_thin"):
+                                depth_ok += 1
+                            opened = fade_shadow.maybe_open(_cand, current_time, snapshot_time_str)
+                            if opened:
+                                matched += len(opened)
+                            maker_shadow.maybe_open(_cand, current_time, snapshot_time_str)
+
+                        if fade_scan_candidates or matched:
+                            write_to_logs(
+                                f"[{snapshot_time_str}] RESEARCH_FADE_SCAN | "
+                                f"raw={len(fade_scan_candidates)} unique={len(fade_unique)} "
+                                f"depth_ok={depth_ok} opened={matched} "
+                                f"profile={getattr(cfg, 'RESEARCH_FADE_V1_PROFILES', '-') }\n"
+                            )
 
                     # Direct close polling for active fade/maker positions.
                     # This is independent from candidate/ticker recurrence.
