@@ -1007,20 +1007,45 @@ async def scan_futures():
 
                         depth_ok = 0
                         matched = 0
+                        reason_counts = {}
+                        examples = []
+
                         for _cand in fade_pack["RESEARCH_FADE_V1_SHADOW"]:
                             if _cand.get("depth_available") and not _cand.get("depth_thin"):
                                 depth_ok += 1
-                            opened = fade_shadow.maybe_open(_cand, current_time, snapshot_time_str)
+
+                            opened, reasons = fade_shadow.maybe_open(
+                                _cand, current_time, snapshot_time_str, return_reasons=True
+                            )
                             if opened:
                                 matched += len(opened)
+                            else:
+                                for r in reasons[:3]:
+                                    reason_counts[r] = reason_counts.get(r, 0) + 1
+
+                            if len(examples) < 5:
+                                examples.append(
+                                    f"{_cand.get('clean_symbol', _cand.get('symbol','?'))}:"
+                                    f"pc={float(_cand.get('price_change',0)):.2f},"
+                                    f"vol={float(_cand.get('vol_ratio',0)):.1f},"
+                                    f"sp={float(_cand.get('spread_bps',999)):.2f},"
+                                    f"rank={int(float(_cand.get('current_turnover_rank',999999)))},"
+                                    f"thin={_cand.get('depth_thin')}"
+                                )
+
                             maker_shadow.maybe_open(_cand, current_time, snapshot_time_str)
 
                         if fade_scan_candidates or matched:
+                            top_reasons = ",".join(
+                                f"{k}={v}" for k, v in sorted(reason_counts.items(), key=lambda x: -x[1])[:8]
+                            )
                             write_to_logs(
                                 f"[{snapshot_time_str}] RESEARCH_FADE_SCAN | "
                                 f"raw={len(fade_scan_candidates)} unique={len(fade_unique)} "
                                 f"depth_ok={depth_ok} opened={matched} "
-                                f"profile={getattr(cfg, 'RESEARCH_FADE_V1_PROFILES', '-') }\n"
+                                f"profile={getattr(cfg, 'RESEARCH_FADE_V1_PROFILES', '-')} "
+                                f"reasons={top_reasons or '-'} "
+                                f"examples={' ; '.join(examples) if examples else '-'}\n"
                             )
 
                     # Direct close polling for active fade/maker positions.

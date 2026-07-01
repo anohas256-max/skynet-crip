@@ -189,22 +189,24 @@ class ResearchFadeV1Shadow:
 
         return True, "MATCH"
 
-    def maybe_open(self, cand, current_time, time_str):
+    def maybe_open(self, cand, current_time, time_str, return_reasons=False):
         if not self.enabled():
-            return []
+            return ([], ["DISABLED"]) if return_reasons else []
 
         opened = []
+        reject_reasons = []
         symbol = cand.get("symbol", "")
         clean = cand.get("clean_symbol", symbol)
         price = sf(cand.get("price"))
         if not symbol or price <= 0:
-            return opened
+            return (opened, ["BAD_SYMBOL_OR_PRICE"]) if return_reasons else opened
 
         cand["_current_time"] = current_time
 
         for profile in self.profiles:
             ok, reason = self._matches_profile(cand, profile)
             if not ok:
+                reject_reasons.append(f"{profile.get('name','?')}:{reason}")
                 continue
 
             key = self._active_key(profile["name"], symbol)
@@ -241,7 +243,7 @@ class ResearchFadeV1Shadow:
             )
             opened.append(profile["name"])
 
-        return opened
+        return (opened, reject_reasons) if return_reasons else opened
 
     def update_price(self, symbol, clean_symbol, price, current_time, time_str):
         if not self.enabled():
