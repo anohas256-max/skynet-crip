@@ -27,6 +27,12 @@ TTL_SECONDS = float(os.getenv("V18_FADE_DB_TTL_SECONDS", "300"))
 COOLDOWN_SECONDS = float(os.getenv("V18_FADE_DB_COOLDOWN_SECONDS", "180"))
 MAX_OPEN_TOTAL = int(float(os.getenv("V18_FADE_DB_MAX_OPEN_TOTAL", "3")))
 POLL_SECONDS = float(os.getenv("V18_FADE_DB_POLL_SECONDS", "5"))
+BLACKLIST = {
+    x.strip().upper()
+    for x in os.getenv("V18_FADE_DB_BLACKLIST", "").replace(";", ",").split(",")
+    if x.strip()
+}
+AUTO_BAN_AFTER_SL = int(float(os.getenv("V18_FADE_DB_AUTO_BAN_AFTER_SL", "2")))
 COST_PCT = float(os.getenv("V18_FADE_DB_COST_PCT", "0.03"))
 
 MARGIN = float(os.getenv("V18_FADE_DB_MARGIN", "3.0"))
@@ -45,13 +51,22 @@ def log(line):
 def load_state():
     if STATE.exists():
         try:
-            return json.loads(STATE.read_text())
+            st = json.loads(STATE.read_text())
+            st.setdefault("last_id", None)
+            st.setdefault("active", {})
+            st.setdefault("last_open_by_symbol", {})
+            st.setdefault("symbol_sl", {})
+            st.setdefault("symbol_net", {})
+            st.setdefault("stats", {"opened": 0, "closed": 0, "wins": 0, "losses": 0, "net": 0.0, "gross": 0.0, "costs": 0.0})
+            return st
         except Exception:
             pass
     return {
         "last_id": None,
         "active": {},
         "last_open_by_symbol": {},
+        "symbol_sl": {},
+        "symbol_net": {},
         "stats": {"opened": 0, "closed": 0, "wins": 0, "losses": 0, "net": 0.0, "gross": 0.0, "costs": 0.0},
     }
 
@@ -93,8 +108,15 @@ def fetch_new_signals(last_id):
     finally:
         con.close()
 
-def passes(r):
+def passes(r, st=None):
     try:
+        clean = str(r.get("clean_symbol") or r.get("symbol") or "").replace("_USDT", "").upper()
+        if clean in BLACKLIST:
+            return False
+        if st is not None and AUTO_BAN_AFTER_SL > 0:
+            if int(st.get("symbol_sl", {}).get(clean, 0)) >= AUTO_BAN_AFTER_SL:
+                return False
+
         return (
             float(r.get("price_change") or 0) >= PC_MIN
             and float(r.get("vol_ratio") or 0) >= VOL_MIN
@@ -163,7 +185,8 @@ async def main():
 
     log(
         f"START | {PROFILE} pc>={PC_MIN} vol>={VOL_MIN} spread<={SPREAD_MAX} rank<={RANK_MAX} "
-        f"TP={TP_PCT} SL={SL_PCT} TTL={TTL_SECONDS}s cost={COST_PCT}% real=OFF"
+        f"TP={TP_PCT} SL={SL_PCT} TTL={TTL_SECONDS}s cost={COST_PCT}% "
+        f"blacklist={','.join(sorted(BLACKLIST)) or '-'} auto_ban_sl={AUTO_BAN_AFTER_SL} real=OFF"
     )
 
     last_report = 0.0
@@ -175,7 +198,7 @@ async def main():
                 for r in rows:
                     st["last_id"] = max(int(st["last_id"]), int(r["id"]))
 
-                    if not passes(r):
+                    if not passes(r, st):
                         continue
 
                     symbol = r["symbol"]
@@ -246,6 +269,13 @@ async def main():
                         st["stats"]["wins"] += 1
                     else:
                         st["stats"]["losses"] += 1
+
+                    clean_key = str(w.get("clean") or w.get("symbol") or "").replace("_USDT", "").upper()
+                    st.setdefault("symbol_net", {})
+                    st.setdefault("symbol_sl", {})
+                    st["symbol_net"][clean_key] = float(st["symbol_net"].get(clean_key, 0.0)) + float(net)
+                    if reason == "SL":
+                        st["symbol_sl"][clean_key] = int(st["symbol_sl"].get(clean_key, 0)) + 1
 
                     log(
                         f"V18_FADE_DB_CLOSE | {PROFILE} | SHORT | {w['clean']} | {reason} | "
