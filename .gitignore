@@ -58,3 +58,8 @@ clean_observation_6h.pid
 clean_observation_6h.nohup.log
 clean_observation_6h_summary_latest.txt
 log_archive_*/
+# V18 DB fade shadow runtime
+v18_fade_db_shadow_state.json
+v18_fade_db_shadow.log
+v18_fade_db_shadow_report_latest.txt
+v18_fade_db_shadow_analysis_latest.txt
