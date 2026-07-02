@@ -109,10 +109,20 @@ async def get_price(session, symbol):
     url = f"https://contract.mexc.com/api/v1/contract/ticker?symbol={symbol}"
     async with session.get(url, timeout=5) as res:
         data = await res.json()
+
+    if not isinstance(data, dict):
+        return 0.0
+
     d = data.get("data")
     if isinstance(d, list):
         d = d[0] if d else {}
-    return float(d.get("lastPrice") or d.get("last_price") or d.get("fairPrice") or 0)
+    if not isinstance(d, dict):
+        return 0.0
+
+    try:
+        return float(d.get("lastPrice") or d.get("last_price") or d.get("fairPrice") or 0)
+    except Exception:
+        return 0.0
 
 def net_calc(short_profit_pct):
     gross = NOTIONAL * (short_profit_pct / 100.0)
