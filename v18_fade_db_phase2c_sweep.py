@@ -38,10 +38,13 @@ def simulate_short(row):
     if price is None:
         return None
 
-    # likely path columns from old v18 recorders / labs
-    max_up = pick(row, "max_up_5m", "max_up_pct", "max_adverse_pct", "short_mae_5m")
-    max_down = pick(row, "max_down_5m", "max_down_pct", "max_favorable_pct", "short_mfe_5m")
-    close_5m = pick(row, "close_5m", "close_5m_pct", "short_net_5m")
+    # v18_micro_paths.sqlite3 actual columns:
+    # max_up    = maximum move UP after signal, bad for SHORT
+    # max_down  = maximum move DOWN after signal, good for SHORT
+    # close_pct = final pct move after TTL/window; positive means price up, negative means price down
+    max_up = pick(row, "max_up", "max_up_5m", "max_up_pct", "max_adverse_pct", "short_mae_5m")
+    max_down = pick(row, "max_down", "max_down_5m", "max_down_pct", "max_favorable_pct", "short_mfe_5m")
+    close_5m = pick(row, "close_pct", "close_5m", "close_5m_pct", "short_net_5m")
 
     # For SHORT:
     # favorable = price down => max_down is usually negative percent.
