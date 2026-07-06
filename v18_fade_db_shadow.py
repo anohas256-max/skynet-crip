@@ -163,7 +163,7 @@ def write_report(st):
     lines.append("source=/root/skynet/data/v18_micro_paths.sqlite3")
     lines.append("real_trading=OFF")
     lines.append(f"profile={PROFILE}")
-    lines.append(f"rule=SHORT pc>={PC_MIN} pc<={PC_MAX} vol>={VOL_MIN} spread<={SPREAD_MAX} rank<={RANK_MAX} TP={TP_PCT} SL={SL_PCT} TTL={TTL_SECONDS}s cost={COST_PCT}%")
+    lines.append(f"rule=SHORT pc>={PC_MIN} pc<={PC_MAX} pc<={PC_MAX} vol>={VOL_MIN} spread<={SPREAD_MAX} rank<={RANK_MAX} TP={TP_PCT} SL={SL_PCT} TTL={TTL_SECONDS}s cost={COST_PCT}%")
     lines.append("")
     lines.append(
         f"opened={stats['opened']} closed={stats['closed']} active={len(active)} "
@@ -185,7 +185,7 @@ async def main():
     init_last_id(st)
 
     log(
-        f"START | {PROFILE} pc>={PC_MIN} pc<={PC_MAX} vol>={VOL_MIN} spread<={SPREAD_MAX} rank<={RANK_MAX} "
+        f"START | {PROFILE} pc>={PC_MIN} pc<={PC_MAX} pc<={PC_MAX} vol>={VOL_MIN} spread<={SPREAD_MAX} rank<={RANK_MAX} "
         f"TP={TP_PCT} SL={SL_PCT} TTL={TTL_SECONDS}s cost={COST_PCT}% "
         f"blacklist={','.join(sorted(BLACKLIST)) or '-'} auto_ban_sl={AUTO_BAN_AFTER_SL} real=OFF"
     )
