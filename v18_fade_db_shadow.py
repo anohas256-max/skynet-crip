@@ -18,6 +18,7 @@ REPORT = ROOT / "v18_fade_db_shadow_report_latest.txt"
 
 PROFILE = "V18_DB_SHORT_PC030_SP3_R150_V5"
 PC_MIN = float(os.getenv("V18_FADE_DB_PC_MIN", "0.30"))
+PC_MAX = float(os.getenv("V18_FADE_DB_PC_MAX", "999.0"))
 VOL_MIN = float(os.getenv("V18_FADE_DB_VOL_MIN", "5.0"))
 SPREAD_MAX = float(os.getenv("V18_FADE_DB_SPREAD_MAX", "3.0"))
 RANK_MAX = int(float(os.getenv("V18_FADE_DB_RANK_MAX", "150")))
@@ -162,7 +163,7 @@ def write_report(st):
     lines.append("source=/root/skynet/data/v18_micro_paths.sqlite3")
     lines.append("real_trading=OFF")
     lines.append(f"profile={PROFILE}")
-    lines.append(f"rule=SHORT pc>={PC_MIN} vol>={VOL_MIN} spread<={SPREAD_MAX} rank<={RANK_MAX} TP={TP_PCT} SL={SL_PCT} TTL={TTL_SECONDS}s cost={COST_PCT}%")
+    lines.append(f"rule=SHORT pc>={PC_MIN} pc<={PC_MAX} vol>={VOL_MIN} spread<={SPREAD_MAX} rank<={RANK_MAX} TP={TP_PCT} SL={SL_PCT} TTL={TTL_SECONDS}s cost={COST_PCT}%")
     lines.append("")
     lines.append(
         f"opened={stats['opened']} closed={stats['closed']} active={len(active)} "
@@ -184,7 +185,7 @@ async def main():
     init_last_id(st)
 
     log(
-        f"START | {PROFILE} pc>={PC_MIN} vol>={VOL_MIN} spread<={SPREAD_MAX} rank<={RANK_MAX} "
+        f"START | {PROFILE} pc>={PC_MIN} pc<={PC_MAX} vol>={VOL_MIN} spread<={SPREAD_MAX} rank<={RANK_MAX} "
         f"TP={TP_PCT} SL={SL_PCT} TTL={TTL_SECONDS}s cost={COST_PCT}% "
         f"blacklist={','.join(sorted(BLACKLIST)) or '-'} auto_ban_sl={AUTO_BAN_AFTER_SL} real=OFF"
     )
