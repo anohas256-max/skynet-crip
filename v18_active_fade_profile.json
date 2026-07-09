@@ -1,0 +1,27 @@
+{
+  "profile_name": "V18_SWEEP_WINNER_RANK30_PC120",
+  "created_utc": "2026-07-09",
+  "source": "v18_fade_offline_sweep_latest.txt",
+  "reason": "Offline sweep after commission: STATIC pc<=1.2 vol>=12 spread<=2 rank<=30 gave n=27 net=+0.4280 avg=+0.01585 WR=66.7% PF=2.61. Chosen because sample is larger than ultra-strict n=5-16 variants.",
+  "min_new_closes_before_adapt": 20,
+  "env": {
+    "REAL_TRADING_ENABLED": "false",
+    "REAL_TRADING_ARMED": "false",
+    "LIVE_DRY_RUN": "true",
+    "CLEAN_CORE_ONLY": "true",
+    "RESEARCH_FADE_V1_ENABLED": "false",
+
+    "V18_FADE_DB_PC_MIN": "0.30",
+    "V18_FADE_DB_PC_MAX": "1.20",
+    "V18_FADE_DB_VOL_MIN": "12.0",
+    "V18_FADE_DB_SPREAD_MAX": "2.0",
+    "V18_FADE_DB_RANK_MAX": "30",
+    "V18_FADE_DB_MAX_OPEN_TOTAL": "1",
+    "V18_FADE_DB_BLACKLIST": "ALLO,BREV,KORU,LIT,M,PENDLE,RIF,SKYAI,SOXL,TAC,XPL",
+    "V18_FADE_DB_AUTO_BAN_AFTER_SL": "1",
+    "V18_FADE_DB_TP_PCT": "3.0",
+    "V18_FADE_DB_SL_PCT": "0.3",
+    "V18_FADE_DB_TTL_SECONDS": "300",
+    "V18_FADE_DB_COST_PCT": "0.03"
+  }
+}
