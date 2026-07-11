@@ -92,40 +92,126 @@ else:
 PY
 
   echo
-  echo "=== DB MATCH COUNT LAST 24H FOR PHASE2D PROFILE ==="
-  sqlite3 /root/skynet/data/v18_micro_paths.sqlite3 "
-  SELECT COUNT(*)
-  FROM signals
-  WHERE time_iso >= datetime('now','-24 hours')
-    AND price_change >= 0.30
-    AND vol_ratio >= 12
-    AND spread_bps <= 2
-    AND rank <= 50
-    AND clean_symbol NOT IN ('ALLO','XPL');
-  " || true
+  echo "=== DB MATCHES LAST 24H FOR CURRENT ACTIVE PROFILE ==="
+
+  python3 - <<'PYMON'
+import json
+import sqlite3
+from pathlib import Path
+
+ROOT = Path("/root/skynet")
+PROFILE = ROOT / "v18_active_fade_profile.json"
+DB = ROOT / "data/v18_micro_paths.sqlite3"
+
+if not PROFILE.exists():
+    print(f"ACTIVE_PROFILE_ERROR=missing {PROFILE}")
+    raise SystemExit(0)
+
+data = json.loads(PROFILE.read_text(encoding="utf-8"))
+env = data.get("env", {})
+
+def number(name, default):
+    try:
+        return float(env.get(name, default))
+    except Exception:
+        return float(default)
+
+pc_min = number("V18_FADE_DB_PC_MIN", 0.30)
+pc_max = number("V18_FADE_DB_PC_MAX", 999.0)
+vol_min = number("V18_FADE_DB_VOL_MIN", 0.0)
+spread_max = number("V18_FADE_DB_SPREAD_MAX", 999999.0)
+rank_max = int(number("V18_FADE_DB_RANK_MAX", 999999))
+
+blacklist = sorted({
+    value.strip().upper()
+    for value in str(
+        env.get("V18_FADE_DB_BLACKLIST", "")
+    ).replace(";", ",").split(",")
+    if value.strip()
+})
+
+print(f"profile_name={data.get('profile_name', '-')}")
+print(
+    f"filter=pc:{pc_min}..{pc_max} "
+    f"vol>={vol_min} spread<={spread_max} "
+    f"rank<={rank_max}"
+)
+print(
+    "blacklist="
+    + (",".join(blacklist) if blacklist else "-")
+)
+
+where = """
+    time_iso >= datetime('now','-24 hours')
+    AND price_change >= ?
+    AND price_change <= ?
+    AND vol_ratio >= ?
+    AND spread_bps <= ?
+    AND rank <= ?
+"""
+
+params = [
+    pc_min,
+    pc_max,
+    vol_min,
+    spread_max,
+    rank_max,
+]
+
+if blacklist:
+    placeholders = ",".join("?" for _ in blacklist)
+    where += f" AND UPPER(clean_symbol) NOT IN ({placeholders})"
+    params.extend(blacklist)
+
+connection = sqlite3.connect(
+    f"file:{DB}?mode=ro",
+    uri=True,
+    timeout=20,
+)
+
+count = connection.execute(
+    f"SELECT COUNT(*) FROM signals WHERE {where}",
+    params,
+).fetchone()[0]
+
+print(f"active_profile_matches_24h={count}")
+print("")
+print("RECENT ACTIVE-PROFILE MATCHES:")
+
+rows = connection.execute(
+    f"""
+    SELECT
+        id,
+        time_iso,
+        clean_symbol,
+        ROUND(price_change, 3),
+        ROUND(vol_ratio, 1),
+        ROUND(spread_bps, 2),
+        rank,
+        ROUND(max_up, 3),
+        ROUND(max_down, 3),
+        ROUND(close_pct, 3)
+    FROM signals
+    WHERE {where}
+    ORDER BY id DESC
+    LIMIT 40
+    """,
+    params,
+).fetchall()
+
+connection.close()
+
+for row in rows:
+    print("|".join(
+        "" if value is None else str(value)
+        for value in row
+    ))
+
+if not rows:
+    print("NO_CURRENT_PROFILE_MATCHES")
+PYMON
 
   echo
-  echo "=== RECENT MATCHING DB ROWS ==="
-  sqlite3 /root/skynet/data/v18_micro_paths.sqlite3 "
-  SELECT id, time_iso, clean_symbol,
-         ROUND(price_change,3) pc,
-         ROUND(vol_ratio,1) vol,
-         ROUND(spread_bps,2) spread,
-         rank,
-         ROUND(max_up,3) max_up,
-         ROUND(max_down,3) max_down,
-         ROUND(close_pct,3) close_pct
-  FROM signals
-  WHERE time_iso >= datetime('now','-24 hours')
-    AND price_change >= 0.30
-    AND vol_ratio >= 12
-    AND spread_bps <= 2
-    AND rank <= 50
-    AND clean_symbol NOT IN ('ALLO','XPL')
-  ORDER BY id DESC
-  LIMIT 40;
-  " || true
-
 } | tee "$SUMMARY"
 
 cp -f v18_fade_db_shadow_report_latest.txt "$OUTDIR/report_${NOW}.txt" 2>/dev/null || true
