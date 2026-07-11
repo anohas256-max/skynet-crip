@@ -1,8 +1,8 @@
 {
-  "profile_name": "V18_SWEEP_WINNER_RANK30_PC120",
+  "profile_name": "V18_FORWARD_STAGE2_PC080_VOL15_RANK30",
   "created_utc": "2026-07-09",
-  "source": "v18_fade_offline_sweep_latest.txt",
-  "reason": "Offline sweep after commission: STATIC pc<=1.2 vol>=12 spread<=2 rank<=30 gave n=27 net=+0.4280 avg=+0.01585 WR=66.7% PF=2.61. Chosen because sample is larger than ultra-strict n=5-16 variants.",
+  "source": "forward shadow 13 closes + v18_fade_db_shadow_analysis_latest",
+  "reason": "Forward stage1 pc<=1.2 vol>=12 rank<=30 after 13 closes was net negative: n=13 net=-0.0482 PF=0.81. Analysis showed SL kills TIME edge: TIME n=9 net=+0.1721 PF=6.11, SL n=4 net=-0.2203. vol_8_15 was toxic n=6 net=-0.1523 PF=0.31 while vol_15_plus was strong n=6 net=+0.1226 PF=9.07 with 0 SL. pc_080_120 and pc_120_plus were negative. Therefore tighten to pc<=0.8 and vol>=15 for clean forward stage2.",
   "min_new_closes_before_adapt": 20,
   "env": {
     "REAL_TRADING_ENABLED": "false",
@@ -10,10 +10,9 @@
     "LIVE_DRY_RUN": "true",
     "CLEAN_CORE_ONLY": "true",
     "RESEARCH_FADE_V1_ENABLED": "false",
-
     "V18_FADE_DB_PC_MIN": "0.30",
-    "V18_FADE_DB_PC_MAX": "1.20",
-    "V18_FADE_DB_VOL_MIN": "12.0",
+    "V18_FADE_DB_PC_MAX": "0.80",
+    "V18_FADE_DB_VOL_MIN": "15.0",
     "V18_FADE_DB_SPREAD_MAX": "2.0",
     "V18_FADE_DB_RANK_MAX": "30",
     "V18_FADE_DB_MAX_OPEN_TOTAL": "1",
@@ -23,5 +22,6 @@
     "V18_FADE_DB_SL_PCT": "0.3",
     "V18_FADE_DB_TTL_SECONDS": "300",
     "V18_FADE_DB_COST_PCT": "0.03"
-  }
+  },
+  "updated_utc": "2026-07-11 12:30:12 UTC"
 }
