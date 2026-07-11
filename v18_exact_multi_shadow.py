@@ -27,6 +27,12 @@ DEPTH_URL = (
 POLL_SECONDS = 5.0
 TTL_SECONDS = 300.0
 COOLDOWN_SECONDS = 180.0
+
+# Do not create fake forward trades from DB rows accumulated
+# while this service was stopped. One-minute signals may be
+# slightly delayed, therefore the guard is 90 seconds.
+MAX_SIGNAL_AGE_SECONDS = 90.0
+
 NOTIONAL_USD = 12.0
 
 # Bid/ask prices already include the observed spread.
@@ -129,6 +135,24 @@ def safe_float(
         return default
 
 
+def parse_signal_timestamp(value: Any) -> datetime | None:
+    if value is None:
+        return None
+
+    raw = str(value).strip()
+    raw = raw.replace(" UTC", "").replace("Z", "+00:00")
+
+    try:
+        result = datetime.fromisoformat(raw)
+
+        if result.tzinfo is None:
+            result = result.replace(tzinfo=timezone.utc)
+
+        return result.astimezone(timezone.utc)
+    except Exception:
+        return None
+
+
 def log_line(message: str) -> None:
     line = f"[{utc_now()}] {message}"
     print(line, flush=True)
@@ -177,6 +201,7 @@ def empty_lane_state() -> dict:
 
 def normalize_state(state: dict) -> dict:
     state.setdefault("last_id", None)
+    state.setdefault("stale_skipped", 0)
     state.setdefault("lanes", {})
 
     for lane_name in LANES:
@@ -557,6 +582,10 @@ def write_report(state: dict) -> None:
 
     lines.append(f"db={DB}")
     lines.append(f"last_id={state.get('last_id')}")
+    lines.append(
+        f"stale_skipped={state.get('stale_skipped', 0)} "
+        f"max_signal_age={MAX_SIGNAL_AGE_SECONDS:.0f}s"
+    )
     lines.append(f"notional=${NOTIONAL_USD:.2f}")
     lines.append(
         "SHORT executable model: "
@@ -713,6 +742,37 @@ async def main() -> None:
                         int(state["last_id"]),
                         row_id,
                     )
+
+                    signal_time = parse_signal_timestamp(
+                        row.get("time_iso")
+                    )
+
+                    signal_age = (
+                        now - signal_time.timestamp()
+                        if signal_time is not None
+                        else None
+                    )
+
+                    if (
+                        signal_age is None
+                        or signal_age < -10.0
+                        or signal_age > MAX_SIGNAL_AGE_SECONDS
+                    ):
+                        state["stale_skipped"] = (
+                            int(state.get("stale_skipped", 0)) + 1
+                        )
+
+                        if (
+                            int(state["stale_skipped"]) <= 10
+                            or int(state["stale_skipped"]) % 100 == 0
+                        ):
+                            log_line(
+                                f"SIGNAL_STALE_SKIP | id={row_id} "
+                                f"time_iso={row.get('time_iso')} "
+                                f"age={signal_age}"
+                            )
+
+                        continue
 
                     clean = str(
                         row.get("clean_symbol")
