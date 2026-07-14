@@ -3,8 +3,8 @@
 import v18_exact_multi_shadow as exact
 
 
-name = "RESEARCH_PC120_250_WALLPOS_TIME"
-config = exact.LANES[name]
+R80 = "RESEARCH_PC120_250_WALLPOS_TIME"
+R120 = "RESEARCH_PC120_250_WALLPOS_R120_TIME"
 
 
 def row(
@@ -25,66 +25,72 @@ def row(
     }
 
 
-assert exact.lane_passes(
-    row(),
-    config,
-), "valid WALL_POS candidate was rejected"
+r80 = exact.LANES[R80]
+r120 = exact.LANES[R120]
 
-assert not exact.lane_passes(
-    row(wall=0.0),
-    config,
-), "wall=0 was accepted"
-
-assert not exact.lane_passes(
-    row(wall=-0.10),
-    config,
-), "negative wall was accepted"
-
-assert not exact.lane_passes(
-    row(pc=1.19),
-    config,
-), "pc below range was accepted"
-
-assert not exact.lane_passes(
-    row(pc=2.51),
-    config,
-), "pc above range was accepted"
-
-assert not exact.lane_passes(
-    row(vol=7.9),
-    config,
-), "volume below minimum was accepted"
-
-assert not exact.lane_passes(
-    row(spread=2.01),
-    config,
-), "spread above maximum was accepted"
+assert exact.lane_passes(row(rank=40), r80)
+assert exact.lane_passes(row(rank=40), r120)
 
 assert not exact.lane_passes(
     row(rank=81),
-    config,
-), "rank above maximum was accepted"
+    r80,
+), "R80 accepted rank=81"
 
-assert config["time_only"] is True
-assert config["open_enabled"] is True
+assert exact.lane_passes(
+    row(rank=100),
+    r120,
+), "R120 rejected rank=100"
 
-assert (
-    exact.LANES["WF_PC120_SL03_BAN1"]["open_enabled"]
-    is False
-)
+assert not exact.lane_passes(
+    row(rank=121),
+    r120,
+), "R120 accepted rank=121"
 
-assert (
-    exact.LANES["WF_PC120_SL05_BAN1"]["open_enabled"]
-    is False
-)
+for config in (r80, r120):
+    assert not exact.lane_passes(
+        row(wall=0.0),
+        config,
+    )
 
-assert (
-    exact.LANES["CONTROL_STAGE2"]["open_enabled"]
-    is False
-)
+    assert not exact.lane_passes(
+        row(wall=-0.1),
+        config,
+    )
+
+    assert not exact.lane_passes(
+        row(pc=1.19),
+        config,
+    )
+
+    assert not exact.lane_passes(
+        row(pc=2.51),
+        config,
+    )
+
+    assert not exact.lane_passes(
+        row(vol=7.99),
+        config,
+    )
+
+    assert not exact.lane_passes(
+        row(spread=2.01),
+        config,
+    )
+
+    assert config["time_only"] is True
+    assert config["open_enabled"] is True
+
+for lane in (
+    "WF_PC120_SL03_BAN1",
+    "WF_PC120_SL05_BAN1",
+    "CONTROL_STAGE2",
+):
+    assert (
+        exact.LANES[lane]["open_enabled"] is False
+    ), f"{lane} unexpectedly enabled"
 
 print(
     "EXACT_WALLPOS_SELFTEST_OK "
-    "pc=1.20..2.50 vol>=8 spread<=2 "
-    "rank<=80 wall>0 exit=TIME_ONLY"
+    "R80+R120 wall>0 TIME_ONLY; "
+    "old negative lanes disabled"
 )

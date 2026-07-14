@@ -172,8 +172,8 @@ def main():
         result = evaluate(rows, config)
 
         stable = (
-            result["train"]["n"] >= 25
-            and result["test"]["n"] >= 10
+            result["train"]["n"] >= 50
+            and result["test"]["n"] >= 20
 
             and result["train"]["sum"] > 0
             and result["test"]["sum"] > 0
@@ -181,8 +181,11 @@ def main():
             and result["train"]["pf"] >= 1.10
             and result["test"]["pf"] >= 1.10
 
+            and result["train"]["leave_best"] > 0
+            and result["test"]["leave_best"] > 0
             and result["all"]["leave_best"] > 0
-            and result["all"]["positive_share"] <= 0.50
+
+            and result["all"]["positive_share"] <= 0.45
 
             and result["positive_folds"] >= 6
         )
@@ -205,6 +208,30 @@ def main():
         ),
         reverse=True,
     )
+
+    # Different parameter sets may select exactly the same trades.
+    # Count those as one result, not as independent confirmation.
+    unique_neighborhood = []
+    seen_trade_sets = set()
+
+    for item in neighborhood:
+        result = item[3]
+
+        signature = tuple(
+            (
+                str(trade["symbol"]),
+                round(float(trade["ts"]), 3),
+            )
+            for trade in result["all_trades"]
+        )
+
+        if signature in seen_trade_sets:
+            continue
+
+        seen_trade_sets.add(signature)
+        unique_neighborhood.append(item)
+
+    neighborhood = unique_neighborhood
 
     stable_count = sum(
         1
@@ -285,8 +312,13 @@ def main():
 
     lines.append("")
     lines.append(
-        f"NEIGHBORHOOD configs={len(neighborhood)} "
-        f"stable={stable_count}"
+        f"NEIGHBORHOOD unique_trade_sets={len(neighborhood)} "
+        f"strict_stable={stable_count}"
+    )
+    lines.append(
+        "Strict stable gate: train>=50, test>=20, "
+        "positive train/test PF>=1.10, positive leave-best "
+        "in train/test/all, concentration<=45%, folds>=6/8."
     )
 
     for index, (

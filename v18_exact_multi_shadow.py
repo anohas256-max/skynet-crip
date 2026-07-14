@@ -133,6 +133,25 @@ LANES = {
         "time_only": True,
         "open_enabled": True,
     },
+
+    # Neighborhood challenger. It passed the stricter historical
+    # 50/20 sample, stress-cost, leave-best and 6/8-fold checks.
+    # It remains research-only because it was discovered during
+    # neighborhood exploration rather than on untouched forward data.
+    "RESEARCH_PC120_250_WALLPOS_R120_TIME": {
+        "pc_min": 1.20,
+        "pc_max": 2.50,
+        "vol_min": 8.0,
+        "spread_max": 2.00,
+        "rank_max": 120,
+        "tp": 999.0,
+        "sl": 999.0,
+        "ban_after_sl": 0,
+        "blacklist": CURRENT_BLACKLIST,
+        "wall_gt": 0.0,
+        "time_only": True,
+        "open_enabled": True,
+    },
 }
 
 
