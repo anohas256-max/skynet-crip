@@ -70,6 +70,7 @@ LANES = {
         "sl": 0.3,
         "ban_after_sl": 0,
         "blacklist": CURRENT_BLACKLIST,
+        "open_enabled": True,
     },
 
     # Top walk-forward candidate; same profile that previously
@@ -84,6 +85,7 @@ LANES = {
         "sl": 0.3,
         "ban_after_sl": 1,
         "blacklist": CURRENT_BLACKLIST,
+        "open_enabled": False,
     },
 
     # Same signal selection, wider stop.
@@ -97,6 +99,7 @@ LANES = {
         "sl": 0.5,
         "ban_after_sl": 1,
         "blacklist": CURRENT_BLACKLIST,
+        "open_enabled": False,
     },
 
     # Current running Stage2, used as a control lane.
@@ -110,6 +113,25 @@ LANES = {
         "sl": 0.3,
         "ban_after_sl": 1,
         "blacklist": CURRENT_BLACKLIST,
+        "open_enabled": False,
+    },
+
+    # Directional rescue-lab near-pass.
+    # Research-only: positive train/test under 0.26% stress
+    # and four positive historical folds, but under-sized sample.
+    "RESEARCH_PC120_250_WALLPOS_TIME": {
+        "pc_min": 1.20,
+        "pc_max": 2.50,
+        "vol_min": 8.0,
+        "spread_max": 2.00,
+        "rank_max": 80,
+        "tp": 999.0,
+        "sl": 999.0,
+        "ban_after_sl": 0,
+        "blacklist": CURRENT_BLACKLIST,
+        "wall_gt": 0.0,
+        "time_only": True,
+        "open_enabled": True,
     },
 }
 
@@ -321,6 +343,7 @@ def fetch_new_signals(last_id: int) -> list[dict]:
                 vol_ratio,
                 spread_bps,
                 rank,
+                wall_skew,
                 bid1,
                 ask1
             FROM signals
@@ -419,6 +442,7 @@ def lane_passes(
     vol = safe_float(row.get("vol_ratio"))
     spread = safe_float(row.get("spread_bps"))
     rank = safe_float(row.get("rank"))
+    wall = safe_float(row.get("wall_skew"))
     bid1 = safe_float(row.get("bid1"))
     ask1 = safe_float(row.get("ask1"))
 
@@ -434,6 +458,12 @@ def lane_passes(
 
     if bid1 <= 0 or ask1 <= bid1:
         return False
+
+    wall_gt = config.get("wall_gt")
+
+    if wall_gt is not None:
+        if wall is None or wall <= float(wall_gt):
+            return False
 
     return (
         config["pc_min"] <= pc <= config["pc_max"]
@@ -633,6 +663,9 @@ def write_report(state: dict) -> None:
             f"vol>={config['vol_min']:.1f} "
             f"spread<={config['spread_max']:.2f} "
             f"rank<={config['rank_max']} "
+            f"wall_gt={config.get('wall_gt', '-')} "
+            f"exit={'TIME_ONLY' if config.get('time_only', False) else 'TP_SL_TIME'} "
+            f"open_enabled={int(bool(config.get('open_enabled', True)))} "
             f"TP={config['tp']:.2f}% "
             f"SL={config['sl']:.2f}% "
             f"ban_after_sl={config['ban_after_sl']}"
@@ -716,6 +749,9 @@ async def main() -> None:
             f"vol>={config['vol_min']} "
             f"spread<={config['spread_max']} "
             f"rank<={config['rank_max']} "
+            f"wall_gt={config.get('wall_gt', '-')} "
+            f"time_only={int(bool(config.get('time_only', False)))} "
+            f"open_enabled={int(bool(config.get('open_enabled', True)))} "
             f"TP={config['tp']} SL={config['sl']} "
             f"ban_after_sl={config['ban_after_sl']} "
             f"real=OFF"
@@ -787,6 +823,9 @@ async def main() -> None:
                     for lane_name, config in LANES.items():
                         lane = state["lanes"][lane_name]
 
+                        if not config.get("open_enabled", True):
+                            continue
+
                         if lane["active"] is not None:
                             continue
 
@@ -832,6 +871,7 @@ async def main() -> None:
                             "pc": float(row["price_change"]),
                             "vol": float(row["vol_ratio"]),
                             "rank": int(float(row["rank"])),
+                            "wall": safe_float(row.get("wall_skew")),
                         }
 
                         lane["last_open_by_symbol"][symbol] = now
@@ -846,7 +886,8 @@ async def main() -> None:
                             f"spread={float(row['spread_bps']):.2f}bps "
                             f"pc={float(row['price_change']):+.2f}% "
                             f"vol=x{float(row['vol_ratio']):.1f} "
-                            f"rank={int(float(row['rank']))}"
+                            f"rank={int(float(row['rank']))} "
+                            f"wall={float(safe_float(row.get('wall_skew'), 0.0) or 0.0):+.3f}"
                         )
 
                 active_symbols = sorted({
@@ -899,12 +940,16 @@ async def main() -> None:
 
                     reason = None
 
-                    if executable_move_pct <= -float(config["sl"]):
-                        reason = "SL"
-                    elif executable_move_pct >= float(config["tp"]):
-                        reason = "TP"
-                    elif age >= TTL_SECONDS:
-                        reason = "TIME"
+                    if config.get("time_only", False):
+                        if age >= TTL_SECONDS:
+                            reason = "TIME"
+                    else:
+                        if executable_move_pct <= -float(config["sl"]):
+                            reason = "SL"
+                        elif executable_move_pct >= float(config["tp"]):
+                            reason = "TP"
+                        elif age >= TTL_SECONDS:
+                            reason = "TIME"
 
                     if reason:
                         close_trade(
