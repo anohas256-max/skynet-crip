@@ -78,7 +78,15 @@ def load_rows_from_db(path):
 
         # Forward outcome columns may have different names.
         mfe_cols = [c for c in cols if "mfe" in c.lower() or "max_up" in c.lower() or "future_up" in c.lower()]
-        mae_cols = [c for c in cols if "mae" in c.lower() or "drawdown" in c.lower() or "future_down" in c.lower()]
+        mae_cols = [
+            c for c in cols
+            if (
+                "mae" in c.lower()
+                or "drawdown" in c.lower()
+                or "future_down" in c.lower()
+                or "max_down" in c.lower()
+            )
+        ]
         ret_cols = [c for c in cols if "return" in c.lower() or "ret_" in c.lower() or "pnl" in c.lower()]
 
         if not mfe_cols and not mae_cols and not ret_cols:
@@ -134,7 +142,15 @@ def choose_outcome(row):
     # Prefer explicit MFE/MAE if available.
     keys = list(row.keys())
     mfe_keys = [k for k in keys if "mfe" in k.lower() or "max_up" in k.lower() or "future_up" in k.lower()]
-    mae_keys = [k for k in keys if "mae" in k.lower() or "drawdown" in k.lower() or "future_down" in k.lower()]
+    mae_keys = [
+        k for k in keys
+        if (
+            "mae" in k.lower()
+            or "drawdown" in k.lower()
+            or "future_down" in k.lower()
+            or "max_down" in k.lower()
+        )
+    ]
     ret_keys = [k for k in keys if "return" in k.lower() or "ret_" in k.lower() or "pnl" in k.lower()]
 
     mfe = None
