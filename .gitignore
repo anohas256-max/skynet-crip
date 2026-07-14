@@ -63,3 +63,7 @@ v18_fade_db_shadow_state.json
 v18_fade_db_shadow.log
 v18_fade_db_shadow_report_latest.txt
 v18_fade_db_shadow_analysis_latest.txt
+archive_*/
+*.bak_*
+v18_exact_multi_shadow_state.json
+run_meta_pivot_now.sh

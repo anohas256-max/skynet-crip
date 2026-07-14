@@ -120,6 +120,7 @@ def passes(r, st=None):
 
         return (
             float(r.get("price_change") or 0) >= PC_MIN
+            and float(r.get("price_change") or 0) <= PC_MAX
             and float(r.get("vol_ratio") or 0) >= VOL_MIN
             and float(r.get("spread_bps") or 999) <= SPREAD_MAX
             and int(float(r.get("rank") or 999999)) <= RANK_MAX
