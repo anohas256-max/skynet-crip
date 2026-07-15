@@ -1,0 +1,13 @@
+[Unit]
+Description=SKYNET recursive nested archive and raw data census
+After=skynet-recorder.service skynet-v18-exact-multi-shadow.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/root/skynet
+ExecStart=/root/skynet/.venv/bin/python /root/skynet/v18_recursive_archive_census.py
+User=root
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=infinity
+Environment=PYTHONUNBUFFERED=1
