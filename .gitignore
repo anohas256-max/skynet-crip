@@ -67,3 +67,6 @@ archive_*/
 *.bak_*
 v18_exact_multi_shadow_state.json
 run_meta_pivot_now.sh
+v18_exact_lane_gate_overrides.json
+v18_exact_forward_gate_state.json
+v18_exact_forward_gate_latest.txt

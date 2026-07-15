@@ -18,6 +18,7 @@ DB = ROOT / "data/v18_micro_paths.sqlite3"
 STATE = ROOT / "v18_exact_multi_shadow_state.json"
 LOG = ROOT / "v18_exact_multi_shadow.log"
 REPORT = ROOT / "v18_exact_multi_shadow_latest.txt"
+GATE_OVERRIDES = ROOT / "v18_exact_lane_gate_overrides.json"
 
 DEPTH_URL = (
     "https://contract.mexc.com/api/v1/contract/depth/"
@@ -174,6 +175,42 @@ def safe_float(
         return result
     except Exception:
         return default
+
+
+def load_gate_overrides() -> dict:
+    """
+    Runtime-only lane switches written by the fixed
+    forward gate. Missing or invalid file means no override.
+    """
+    if not GATE_OVERRIDES.exists():
+        return {}
+
+    try:
+        data = json.loads(
+            GATE_OVERRIDES.read_text(encoding="utf-8")
+        )
+
+        if isinstance(data, dict):
+            return {
+                str(name): bool(value)
+                for name, value in data.items()
+            }
+    except Exception:
+        pass
+
+    return {}
+
+
+def lane_effective_open_enabled(
+    lane_name: str,
+    config: dict,
+) -> bool:
+    if not bool(config.get("open_enabled", True)):
+        return False
+
+    overrides = load_gate_overrides()
+
+    return bool(overrides.get(lane_name, True))
 
 
 def parse_signal_timestamp(value: Any) -> datetime | None:
@@ -684,7 +721,7 @@ def write_report(state: dict) -> None:
             f"rank<={config['rank_max']} "
             f"wall_gt={config.get('wall_gt', '-')} "
             f"exit={'TIME_ONLY' if config.get('time_only', False) else 'TP_SL_TIME'} "
-            f"open_enabled={int(bool(config.get('open_enabled', True)))} "
+            f"open_enabled={int(lane_effective_open_enabled(lane_name, config))} "
             f"TP={config['tp']:.2f}% "
             f"SL={config['sl']:.2f}% "
             f"ban_after_sl={config['ban_after_sl']}"
@@ -770,7 +807,7 @@ async def main() -> None:
             f"rank<={config['rank_max']} "
             f"wall_gt={config.get('wall_gt', '-')} "
             f"time_only={int(bool(config.get('time_only', False)))} "
-            f"open_enabled={int(bool(config.get('open_enabled', True)))} "
+            f"open_enabled={int(lane_effective_open_enabled(lane_name, config))} "
             f"TP={config['tp']} SL={config['sl']} "
             f"ban_after_sl={config['ban_after_sl']} "
             f"real=OFF"
@@ -842,7 +879,7 @@ async def main() -> None:
                     for lane_name, config in LANES.items():
                         lane = state["lanes"][lane_name]
 
-                        if not config.get("open_enabled", True):
+                        if not lane_effective_open_enabled(lane_name, config):
                             continue
 
                         if lane["active"] is not None:

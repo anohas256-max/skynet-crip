@@ -1,0 +1,9 @@
+[Unit]
+Description=SKYNET V18 exact forward fixed gate
+After=skynet-v18-exact-multi-shadow.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/root/skynet
+ExecStart=/root/skynet/.venv/bin/python /root/skynet/v18_exact_forward_gate.py
+User=root
