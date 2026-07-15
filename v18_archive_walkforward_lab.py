@@ -143,16 +143,21 @@ def safe_name(value: str) -> str:
 
 
 def is_v18_db(name: str) -> bool:
+    """
+    Accept every SQLite-looking filename.
+
+    Schema validation later decides whether the database
+    is compatible with the V18 exact-path replay.
+    This allows renamed backups, V17 databases and archive copies
+    to be discovered instead of relying on one filename.
+    """
     lower = Path(name).name.lower()
 
-    return (
-        "v18_micro_paths" in lower
-        and lower.endswith(
-            (
-                ".sqlite3",
-                ".sqlite",
-                ".db",
-            )
+    return lower.endswith(
+        (
+            ".sqlite3",
+            ".sqlite",
+            ".db",
         )
     )
 
@@ -251,6 +256,12 @@ def discover(
                     ".sqlite3.gz",
                     ".sqlite3.xz",
                     ".sqlite3.bz2",
+                    ".sqlite.gz",
+                    ".sqlite.xz",
+                    ".sqlite.bz2",
+                    ".db.gz",
+                    ".db.xz",
+                    ".db.bz2",
                 )
             ):
                 archives.append(path)
