@@ -1,12 +1,11 @@
 [Unit]
-Description=Evaluate SKYNET V19 preregistered forward gates
+Description=Evaluate SKYNET V19 preregistered forward gates every 15 minutes
 
 [Timer]
-OnBootSec=20min
-OnUnitActiveSec=3h
-AccuracySec=2min
+OnBootSec=5min
+OnUnitActiveSec=15min
+AccuracySec=1min
 Persistent=true
-
 Unit=skynet-v19-preregistered-forward.service
 
 [Install]
