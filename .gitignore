@@ -74,3 +74,6 @@ data/v19_dynamic_snapshots.sqlite3
 data/v19_dynamic_snapshots.sqlite3-wal
 data/v19_dynamic_snapshots.sqlite3-shm
 v19_dynamic_snapshot_status_latest.txt
+v19_dynamic_structure_audit_latest.txt
+v19_dynamic_structure_candidates_latest.csv
+v19_dynamic_structure_audit_console.txt
