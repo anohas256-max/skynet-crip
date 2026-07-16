@@ -1,0 +1,13 @@
+[Unit]
+Description=Evaluate SKYNET V19 preregistered forward gates
+
+[Timer]
+OnBootSec=20min
+OnUnitActiveSec=3h
+AccuracySec=2min
+Persistent=true
+
+Unit=skynet-v19-preregistered-forward.service
+
+[Install]
+WantedBy=timers.target

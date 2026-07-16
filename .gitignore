@@ -77,3 +77,5 @@ v19_dynamic_snapshot_status_latest.txt
 v19_dynamic_structure_audit_latest.txt
 v19_dynamic_structure_candidates_latest.csv
 v19_dynamic_structure_audit_console.txt
+v19_preregistered_forward_latest.txt
+v19_preregistered_forward_state.json

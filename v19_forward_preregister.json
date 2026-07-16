@@ -1,0 +1,50 @@
+{
+  "cutoff_ts": 1784210690.6952808,
+  "cutoff_utc": "2026-07-16 14:04:50 UTC",
+  "execution": {
+    "hard_cost_pct": 0.36,
+    "max_open": 1,
+    "maximum_snapshot_lateness_seconds": 5.0,
+    "notional_usd": 12.0,
+    "stress_cost_pct": 0.26,
+    "symbol_cluster_seconds": 60,
+    "symbol_cooldown_seconds": 180
+  },
+  "gates": {
+    "n10": "stress_sum > 0 and stress_pf >= 1.00",
+    "n20": "stress_sum > 0, stress_pf >= 1.20, hard_sum > 0, hard_pf >= 1.05, leave_best positive under both costs, at least 5 symbols, best positive symbol share <= 45%, both halves positive",
+    "n40": "stress_sum > 0, stress_pf >= 1.30, hard_sum > 0, hard_pf >= 1.15, leave_best positive under both costs, at least 8 symbols, best positive symbol share <= 35%, both halves positive, at least 4 of 6 folds positive"
+  },
+  "hypotheses": [
+    {
+      "decision_age": 5,
+      "direction": "SHORT",
+      "exit_age": 300,
+      "name": "H1_SHORT_WALL_FLIPS_NEG",
+      "role": "candidate",
+      "state": "WALL_FLIPS_NEG",
+      "universe": "ALL"
+    },
+    {
+      "decision_age": 30,
+      "direction": "LONG",
+      "exit_age": 300,
+      "name": "H2_LONG_FADE_WALL_POS",
+      "role": "candidate",
+      "state": "FADE_PLUS_WALL_POS",
+      "universe": "ALL"
+    },
+    {
+      "decision_age": 5,
+      "direction": "LONG",
+      "exit_age": 300,
+      "name": "C1_LONG_UNCONDITIONAL",
+      "role": "control",
+      "state": "ANY",
+      "universe": "ALL"
+    }
+  ],
+  "promotion_policy": "No automatic promotion. Passing n40 only permits manual review for one new exact-shadow lane. Real trading remains blocked.",
+  "selection_source": "V19 dynamic structure audit completed 2026-07-16",
+  "version": 1
+}

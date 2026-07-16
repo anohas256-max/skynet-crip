@@ -1,0 +1,12 @@
+[Unit]
+Description=SKYNET V19 preregistered untouched forward validator
+After=skynet-v19-dynamic-snapshot-recorder.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/root/skynet
+
+ExecStart=/root/skynet/.venv/bin/python /root/skynet/v19_preregistered_forward_validator.py --send
+
+User=root
+Nice=10
