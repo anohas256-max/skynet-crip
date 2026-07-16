@@ -1,0 +1,21 @@
+[Unit]
+Description=SKYNET V19 dynamic orderbook snapshot recorder
+After=network-online.target skynet-recorder.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/root/skynet
+
+ExecStartPre=/root/skynet/.venv/bin/python /root/skynet/v19_dynamic_snapshot_recorder.py --selftest
+ExecStart=/root/skynet/.venv/bin/python /root/skynet/v19_dynamic_snapshot_recorder.py
+
+User=root
+Restart=always
+RestartSec=5
+Nice=5
+
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

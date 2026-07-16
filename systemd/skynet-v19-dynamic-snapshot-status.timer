@@ -1,0 +1,13 @@
+[Unit]
+Description=Send SKYNET V19 status every 3 hours
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=3h
+AccuracySec=1min
+Persistent=true
+
+Unit=skynet-v19-dynamic-snapshot-status.service
+
+[Install]
+WantedBy=timers.target

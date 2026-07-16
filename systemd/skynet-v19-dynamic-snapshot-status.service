@@ -1,0 +1,11 @@
+[Unit]
+Description=SKYNET V19 dynamic snapshot status report
+After=skynet-v19-dynamic-snapshot-recorder.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/root/skynet
+
+ExecStart=/root/skynet/.venv/bin/python /root/skynet/v19_dynamic_snapshot_recorder.py --status --send
+
+User=root

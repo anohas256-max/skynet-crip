@@ -70,3 +70,7 @@ run_meta_pivot_now.sh
 v18_exact_lane_gate_overrides.json
 v18_exact_forward_gate_state.json
 v18_exact_forward_gate_latest.txt
+data/v19_dynamic_snapshots.sqlite3
+data/v19_dynamic_snapshots.sqlite3-wal
+data/v19_dynamic_snapshots.sqlite3-shm
+v19_dynamic_snapshot_status_latest.txt
