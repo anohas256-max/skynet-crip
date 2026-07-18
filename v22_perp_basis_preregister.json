@@ -1,0 +1,19 @@
+{
+  "audit": "V22 cross-sectional perpetual basis convergence",
+  "created_utc": "2026-07-18",
+  "research_only": true,
+  "safety": {"REAL_TRADING_ENABLED": false, "REAL_TRADING_ARMED": false, "LIVE_DRY_RUN": true},
+  "source": "official Binance USD-M public monthly archives only",
+  "range_utc": ["2022-01-01T00:00:00Z", "2026-07-01T00:00:00Z"],
+  "splits": {"train": ["2022-01-01", "2024-07-01"], "validation": ["2024-07-01", "2025-07-01"], "final": ["2025-07-01", "2026-07-01"]},
+  "universe": ["BTCUSDT", "ETHUSDT", "DOGEUSDT", "BNBUSDT", "AVAXUSDT", "ADAUSDT", "ETCUSDT", "LINKUSDT", "BCHUSDT", "DOTUSDT", "ATOMUSDT"],
+  "decision_hours_utc": [0, 8, 16],
+  "signal": {"basis_discount": "log(index_price / mark_price)", "direction": "long maximum basis_discount; short minimum basis_discount", "signals": ["INSTANT_BASIS", "MEAN_24H_BASIS"]},
+  "holds_hours": [24, 72],
+  "entry": {"primary": "executable open at decision + 1h", "sensitivity_delay_hours": 2, "exit": "executable open at entry + hold"},
+  "portfolio": {"positions_max": 2, "one_long_one_short": true, "notional_usdt_each": 12, "minimum_available_symbols": 8, "no_overlap": true},
+  "costs_round_trip": {"base": 0.0036, "severe": 0.005},
+  "funding": "actual official settlements strictly after entry and at or before exit; long=-notional*rate, short=+notional*rate",
+  "forbidden": ["V19 anomaly/order-flow/snapshots/classifier", "V20 Binance lead", "V21 momentum/return ranks", "thresholds", "filters", "ML", "opposite direction", "parameter selection on PnL"],
+  "final_gate": "only a frozen validation candidate may open final"
+}

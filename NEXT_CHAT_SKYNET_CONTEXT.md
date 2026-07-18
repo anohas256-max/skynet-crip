@@ -10,4 +10,6 @@ Closed research: V19 anomaly/direction (`NO_VALIDATION_EDGE`), V20 Binance lead/
 
 V21 recovery facts: MEXC 1h public history failed continuity; allowed Binance USD-M monthly fallback was feasibility-only. Technical recovery expanded the omitted old-symbol registry and used official monthly funding archives after the live Binance funding API returned HTTP 451. The fixed shared split was 2022-01-01--2026-06-30. Universe: BTC, ETH, DOGE, BNB, AVAX, ADA, ETC, LINK, BCH, DOT, ATOM. All eight fixed 12h/24h configurations failed validation at severe cost; untouched final was never opened.
 
+V22 is also closed: the preregistered basis-only cross-sectional convergence audit used official Binance USD-M monthly executable, mark, index, and actual funding archives over the same fixed universe/split. Actual mark/index gaps were not interpolated; symbols were made unavailable at affected decisions. All four fixed configurations (INSTANT_BASIS or MEAN_24H_BASIS, HOLD_24H or HOLD_72H) failed severe-cost validation. No frozen candidate exists and untouched final was not opened. Decision: `STOP_NO_VALIDATION_EDGE`. Do not reopen, tune, or derive live/shadow/recorder work from V22.
+
 The next permissible task must be a separate, bounded, preregistered research question with data-quality gates and no live or real-trading infrastructure.
