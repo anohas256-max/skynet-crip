@@ -1,0 +1,169 @@
+{
+  "gap_seconds": 72.79716444015503,
+  "profiles": {
+    "PC050_CONTROL": {
+      "config": {
+        "pc_max": 0.5,
+        "pc_min": 0.3,
+        "rank_max": 50,
+        "rank_min": 1,
+        "spread_max": 1.5,
+        "vol_min": 12.0,
+        "wall_positive": false
+      },
+      "decision": "INSUFFICIENT_SAMPLE",
+      "metric": {
+        "avg": -0.026764500047970853,
+        "best_sum": -0.026764500047970853,
+        "best_symbol": "HBAR",
+        "leave_best": 0.0,
+        "median": -0.026764500047970853,
+        "n": 1,
+        "pf": 0.0,
+        "positive_share": 0.0,
+        "sum": -0.026764500047970853,
+        "symbols": 1,
+        "wr": 0.0
+      },
+      "positive_folds": 0,
+      "trades": [
+        {
+          "close_5m": -0.04929143561306022,
+          "close_ts": 1781660748.1133044,
+          "id": 857,
+          "pc": 0.33382789317508205,
+          "rank": 37,
+          "spread": 1.2328936012817313,
+          "stored_short_net": -0.06691125011992713,
+          "stress_net": -0.026764500047970853,
+          "symbol": "HBAR",
+          "time_iso": "2026-06-17 01:40:48",
+          "ts": 1781660447.9346342,
+          "vol": 80.87750177854038,
+          "wall": -0.06293862796397717
+        }
+      ]
+    },
+    "R120_MARGINAL_81_120": {
+      "config": {
+        "pc_max": 2.5,
+        "pc_min": 1.2,
+        "rank_max": 120,
+        "rank_min": 81,
+        "spread_max": 2.0,
+        "vol_min": 8.0,
+        "wall_positive": true
+      },
+      "decision": "INSUFFICIENT_SAMPLE",
+      "metric": {
+        "avg": 0.0,
+        "best_sum": 0.0,
+        "best_symbol": "-",
+        "leave_best": 0.0,
+        "median": 0.0,
+        "n": 0,
+        "pf": 0.0,
+        "positive_share": 0.0,
+        "sum": 0.0,
+        "symbols": 0,
+        "wr": 0.0
+      },
+      "positive_folds": 0,
+      "trades": []
+    },
+    "WALLPOS_R120": {
+      "config": {
+        "pc_max": 2.5,
+        "pc_min": 1.2,
+        "rank_max": 120,
+        "rank_min": 1,
+        "spread_max": 2.0,
+        "vol_min": 8.0,
+        "wall_positive": true
+      },
+      "decision": "INSUFFICIENT_SAMPLE",
+      "metric": {
+        "avg": 0.1553290859996801,
+        "best_sum": 0.1553290859996801,
+        "best_symbol": "BEAT",
+        "leave_best": 0.0,
+        "median": 0.1553290859996801,
+        "n": 1,
+        "pf": 999.0,
+        "positive_share": 1.0,
+        "sum": 0.1553290859996801,
+        "symbols": 1,
+        "wr": 100.0
+      },
+      "positive_folds": 1,
+      "trades": [
+        {
+          "close_5m": -1.5732131116746544,
+          "close_ts": 1781677304.239345,
+          "id": 1591,
+          "pc": 2.173600115157628,
+          "rank": 10,
+          "spread": 1.8804061677320227,
+          "stored_short_net": 0.3883227149992003,
+          "stress_net": 0.1553290859996801,
+          "symbol": "BEAT",
+          "time_iso": "2026-06-17 06:16:42",
+          "ts": 1781677001.8761156,
+          "vol": 8.502056464355023,
+          "wall": 0.05712767699531379
+        }
+      ]
+    },
+    "WALLPOS_R80": {
+      "config": {
+        "pc_max": 2.5,
+        "pc_min": 1.2,
+        "rank_max": 80,
+        "rank_min": 1,
+        "spread_max": 2.0,
+        "vol_min": 8.0,
+        "wall_positive": true
+      },
+      "decision": "INSUFFICIENT_SAMPLE",
+      "metric": {
+        "avg": 0.1553290859996801,
+        "best_sum": 0.1553290859996801,
+        "best_symbol": "BEAT",
+        "leave_best": 0.0,
+        "median": 0.1553290859996801,
+        "n": 1,
+        "pf": 999.0,
+        "positive_share": 1.0,
+        "sum": 0.1553290859996801,
+        "symbols": 1,
+        "wr": 100.0
+      },
+      "positive_folds": 1,
+      "trades": [
+        {
+          "close_5m": -1.5732131116746544,
+          "close_ts": 1781677304.239345,
+          "id": 1591,
+          "pc": 2.173600115157628,
+          "rank": 10,
+          "spread": 1.8804061677320227,
+          "stored_short_net": 0.3883227149992003,
+          "stress_net": 0.1553290859996801,
+          "symbol": "BEAT",
+          "time_iso": "2026-06-17 06:16:42",
+          "ts": 1781677001.8761156,
+          "vol": 8.502056464355023,
+          "wall": 0.05712767699531379
+        }
+      ]
+    }
+  },
+  "source": {
+    "blacklist_size": 11,
+    "closed_rows": 2820,
+    "max_ts": 1781694467.2514355,
+    "min_ts": 1781641305.7013397,
+    "total_rows": 2883
+  },
+  "v18_start": 1781694540.0486
+}
