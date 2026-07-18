@@ -12,4 +12,4 @@ V21 recovery facts: MEXC 1h public history failed continuity; allowed Binance US
 
 V22 is also closed: the preregistered basis-only cross-sectional convergence audit used official Binance USD-M monthly executable, mark, index, and actual funding archives over the same fixed universe/split. Actual mark/index gaps were not interpolated; symbols were made unavailable at affected decisions. All four fixed configurations (INSTANT_BASIS or MEAN_24H_BASIS, HOLD_24H or HOLD_72H) failed severe-cost validation. No frozen candidate exists and untouched final was not opened. Decision: `STOP_NO_VALIDATION_EDGE`. Do not reopen, tune, or derive live/shadow/recorder work from V22.
 
-The next permissible task must be a separate, bounded, preregistered research question with data-quality gates and no live or real-trading infrastructure.
+Meta-audit conclusion: V19--V22 are closed without a validation edge. Global status: `STOP_RESEARCH_NO_EVIDENCE`. Do not start V23 or change trading configuration unless a new external data source or a fundamentally different market hypothesis is introduced. `REAL_TRADING_ENABLED=false`, `REAL_TRADING_ARMED=false`, `LIVE_DRY_RUN=true`.
