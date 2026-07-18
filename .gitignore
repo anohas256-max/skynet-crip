@@ -17,6 +17,9 @@ __pycache__/
 # ===== logs =====
 logs/
 *.log
+*.pid
+*.tar.gz
+*_latest.json
 # ===== runtime data / db / state =====
 data/
 *.db
