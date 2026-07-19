@@ -1,0 +1,27 @@
+{
+  "version": "V27",
+  "source": "data/v18_micro_paths.sqlite3 only; read-only offline replay",
+  "source_window": "2026-06-17 through 2026-07-18 UTC (as recorded)",
+  "prior_v18_scope_excluded": ["static fade/execution-proxy lanes", "TP/SL families", "prequential feature-space tournament"],
+  "split": "chronological timestamp boundary at min_ts + 0.70 * (max_ts - min_ts)",
+  "structures": {
+    "confirm": "sign(imb_5), sign(imb_20), and sign(wall_skew) each equal sign(price_change)",
+    "contradict": "sign(imb_5), sign(imb_20), and sign(wall_skew) each equal -sign(price_change)",
+    "zero_or_missing": "excluded"
+  },
+  "configs": [
+    {"direction": "continuation", "structure": "confirm", "horizon_seconds": 60},
+    {"direction": "continuation", "structure": "confirm", "horizon_seconds": 300},
+    {"direction": "continuation", "structure": "contradict", "horizon_seconds": 60},
+    {"direction": "continuation", "structure": "contradict", "horizon_seconds": 300},
+    {"direction": "fade", "structure": "confirm", "horizon_seconds": 60},
+    {"direction": "fade", "structure": "confirm", "horizon_seconds": 300},
+    {"direction": "fade", "structure": "contradict", "horizon_seconds": 60},
+    {"direction": "fade", "structure": "contradict", "horizon_seconds": 300}
+  ],
+  "path_execution": "first valid recorded path_json observation with age_seconds >= horizon_seconds; no interpolation",
+  "overlap": "one selected position per symbol in any rolling 300 seconds, per configuration",
+  "severe_round_trip_cost": 0.004,
+  "validation_gate": {"minimum_nonoverlapping_trades": 100, "severe_pnl_positive": true, "pf_min": 1.15, "leave_best_symbol_positive": true},
+  "final": "never opened; this is a two-way train/validation replay only"
+}
