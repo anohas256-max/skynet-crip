@@ -1,0 +1,19 @@
+{
+  "version": "V28B",
+  "paper": {"url": "https://arxiv.org/html/2607.09426v1", "methodology_used": ["aggregate trades into UTC calendar-time bins", "buyer-initiated = isBuyerMaker false; seller-initiated = true", "quarter-hour peak window is first 10 seconds at minutes 00/15/30/45", "separate periodic activity/volatility diagnostics from net-of-cost trading evidence"], "aggtrades_observable": ["trade count", "notional volume", "absolute return", "signed aggressive notional flow", "volume-normalized imbalance", "first 10-second quarter-hour return"], "not_observable_or_not_claimed": ["queue position", "spread", "algorithmic trader identity", "article's technical-indicator model", "a volatility burst as an edge"]},
+  "source": "official Binance Data Vision USD-M aggTrades archives only",
+  "universe": ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "DOGEUSDT"],
+  "range_utc": ["2024-01-01", "2026-06-30"],
+  "raw_cap_bytes": 2000000000,
+  "splits": {"train": ["2024-01-01", "2025-01-01"], "validation": ["2025-01-01", "2026-07-01"]},
+  "configs": [
+    {"signal": "sign(first_10s_signed_aggressive_notional_at_quarter_hour)", "direction": "continuation", "entry_delay_seconds": 0, "hold_seconds": 60},
+    {"signal": "sign(first_10s_signed_aggressive_notional_at_quarter_hour)", "direction": "fade", "entry_delay_seconds": 0, "hold_seconds": 60},
+    {"signal": "sign(first_10s_signed_aggressive_notional_at_quarter_hour)", "direction": "continuation", "entry_delay_seconds": 0, "hold_seconds": 300},
+    {"signal": "sign(first_10s_signed_aggressive_notional_at_quarter_hour)", "direction": "fade", "entry_delay_seconds": 0, "hold_seconds": 300}
+  ],
+  "execution": "entry and exit are first actual aggTrade prices at/after boundary+10s+delay and entry+hold; no interpolation; one position per symbol at a time",
+  "robustness": {"delayed_entry_seconds": [1, 5], "severe_round_trip_cost": 0.004, "leave_one_symbol_out": true, "minimum_validation_independent_trades": 200},
+  "hard_pass_all": ["severe validation PnL > 0", "PF >= 1.15", "delayed 5s PnL > 0", "leave-best-symbol PnL > 0", "at least 4 of 5 symbols nonnegative"],
+  "final": "not opened if hard pass fails"
+}
