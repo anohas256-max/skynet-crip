@@ -1,0 +1,13 @@
+{
+  "version": "V24",
+  "hypothesis": "Binance USD-M new-perpetual launch momentum after official announced launch time",
+  "sources": ["official Binance support CMS announcements", "Binance Data Vision USD-M monthly 1m klines", "official Binance monthly fundingRate archives"],
+  "period_utc": ["2022-01-01T00:00:00Z", "2026-07-01T00:00:00Z"],
+  "catalogue_scan": {"catalog_id": 48, "page_no": [1, 111], "page_size": 20},
+  "configs": [{"minutes":15,"hold_hours":24},{"minutes":15,"hold_hours":72},{"minutes":60,"hold_hours":24},{"minutes":60,"hold_hours":72}],
+  "entry": "open of next 1m candle after first N fully closed candles", "exit": "open of first candle after hold", "signal": "sign(initial return)",
+  "costs_round_trip": {"base":0.002,"severe":0.005},
+  "splits": {"train":["2022-01-01","2024-07-01"],"validation":["2024-07-01","2025-07-01"],"final":["2025-07-01","2026-07-01"]},
+  "validation_gate": {"min_trades":40,"severe_pnl_positive":true,"pf_min":1.2,"leave_best_event_positive":true,"positive_validation_quarters_min":3,"delayed_5m_positive":true},
+  "selection": "No parameter selection. Each of the four fixed configurations is independently eligible for untouched final evaluation only if it passes the stated validation gate."
+}
