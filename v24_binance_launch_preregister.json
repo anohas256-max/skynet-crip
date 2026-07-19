@@ -4,6 +4,7 @@
   "sources": ["official Binance support CMS announcements", "Binance Data Vision USD-M monthly 1m klines", "official Binance monthly fundingRate archives"],
   "period_utc": ["2022-01-01T00:00:00Z", "2026-07-01T00:00:00Z"],
   "catalogue_scan": {"catalog_id": 48, "page_no": [1, 111], "page_size": 20},
+  "repaired_source_pass": {"cms_list_pages": [1, 2], "cms_list_or_article_requests_max": 30, "minimum_spacing_seconds": 3, "retry_policy": "none; first 429, 403, or 5xx is STOP_SOURCE_RATE_LIMITED"},
   "configs": [{"minutes":15,"hold_hours":24},{"minutes":15,"hold_hours":72},{"minutes":60,"hold_hours":24},{"minutes":60,"hold_hours":72}],
   "entry": "open of next 1m candle after first N fully closed candles", "exit": "open of first candle after hold", "signal": "sign(initial return)",
   "costs_round_trip": {"base":0.002,"severe":0.005},
